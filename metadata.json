@@ -1,0 +1,6 @@
+{
+  "name": "SMILES Adjacency Matrix Builder",
+  "description": "Molecular graph adjacency matrix calculator and visualizer for SMILES with chemical normalizations including bond order, atomic size, electronegativity, Laplacian, and spectral analysis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
