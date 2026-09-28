@@ -7,6 +7,7 @@ import math
 import numpy as np
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 # Check for RDKit
 try:
@@ -283,7 +284,11 @@ def draw_molecule_svg(mol):
     opts.bondLineWidth = 2.0
     d.DrawMolecule(mol)
     d.FinishDrawing()
-    return d.GetDrawingText()
+    svg = d.GetDrawingText()
+    svg_idx = svg.find("<svg")
+    if svg_idx != -1:
+        svg = svg[svg_idx:]
+    return svg
 
 
 def render_uniform_square_matrix_html(matrix_data, matrix_type: str):
@@ -297,43 +302,30 @@ def render_uniform_square_matrix_html(matrix_data, matrix_type: str):
     total_size = (n + 1) * cell_size
     is_plain = (matrix_type == "plain")
 
-    html = f"""
-    <div style="overflow-x: auto; max-height: 480px; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
-      <div style="width: {total_size}px; height: {total_size}px; margin: 0 auto; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #cbd5e1; border-radius: 4px; overflow: hidden; background: #ffffff;">
-        <table style="border-collapse: collapse; table-layout: fixed; width: {total_size}px; height: {total_size}px; font-family: ui-monospace, monospace; text-align: center;">
-          <thead>
-            <tr style="height: {cell_size}px;">
-              <th style="width: {cell_size}px; height: {cell_size}px; max-width: {cell_size}px; background: #f1f5f9; border: 1px solid #e2e8f0; color: #64748b; font-size: 11px; font-weight: normal;">
-                i \\ j
-              </th>
-    """
-
+    rows_html = []
+    # Header row
+    header_cells = [
+        f'<th style="width:{cell_size}px;min-width:{cell_size}px;max-width:{cell_size}px;height:{cell_size}px;background:#f1f5f9;border:1px solid #cbd5e1;color:#64748b;font-size:11px;font-weight:normal;padding:0;text-align:center;">i \\ j</th>'
+    ]
     for j, atom in enumerate(atoms):
-        html += f"""
-              <th style="width: {cell_size}px; height: {cell_size}px; max-width: {cell_size}px; background: #f1f5f9; border: 1px solid #e2e8f0; color: #334155; line-height: 1;">
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;">
-                  <span style="font-weight: bold; font-size: 11px;">{atom['symbol']}</span>
-                  <span style="color: #94a3b8; font-size: 9px;">{j}</span>
-                </div>
-              </th>
-        """
+        header_cells.append(
+            f'<th style="width:{cell_size}px;min-width:{cell_size}px;max-width:{cell_size}px;height:{cell_size}px;background:#f1f5f9;border:1px solid #cbd5e1;color:#334155;line-height:1;padding:0;text-align:center;">'
+            f'<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:100%;">'
+            f'<span style="font-weight:bold;font-size:11px;">{atom["symbol"]}</span>'
+            f'<span style="color:#94a3b8;font-size:9px;">{j}</span>'
+            f'</div></th>'
+        )
+    rows_html.append(f'<tr style="height:{cell_size}px;">{"".join(header_cells)}</tr>')
 
-    html += """
-            </tr>
-          </thead>
-          <tbody>
-    """
-
+    # Data rows
     for i, atom in enumerate(atoms):
-        html += f"""
-            <tr style="height: {cell_size}px;">
-              <td style="width: {cell_size}px; height: {cell_size}px; max-width: {cell_size}px; background: #f1f5f9; border: 1px solid #e2e8f0; color: #334155; line-height: 1;">
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;">
-                  <span style="font-weight: bold; font-size: 11px;">{atom['symbol']}</span>
-                  <span style="color: #94a3b8; font-size: 9px;">{i}</span>
-                </div>
-              </td>
-        """
+        cells = [
+            f'<td style="width:{cell_size}px;min-width:{cell_size}px;max-width:{cell_size}px;height:{cell_size}px;background:#f1f5f9;border:1px solid #cbd5e1;color:#334155;line-height:1;padding:0;text-align:center;">'
+            f'<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:100%;">'
+            f'<span style="font-weight:bold;font-size:11px;">{atom["symbol"]}</span>'
+            f'<span style="color:#94a3b8;font-size:9px;">{i}</span>'
+            f'</div></td>'
+        ]
         for j in range(n):
             val = matrix[i, j]
             is_active = (abs(val) > 1e-6)
@@ -347,28 +339,76 @@ def render_uniform_square_matrix_html(matrix_data, matrix_type: str):
                 display_val = f"{val:.3f}"
 
             if is_active:
-                bg = "#dbeafe"  # blue-100
-                color = "#1e40af"  # blue-800
+                bg = "#dbeafe"
+                color = "#1e40af"
                 weight = "bold"
             else:
                 bg = "#ffffff"
-                color = "#94a3b8"  # slate-400
+                color = "#94a3b8"
                 weight = "normal"
 
-            html += f"""
-              <td style="width: {cell_size}px; height: {cell_size}px; max-width: {cell_size}px; background: {bg}; color: {color}; font-weight: {weight}; border: 1px solid #e2e8f0; font-size: 11px;">
-                {display_val}
-              </td>
-            """
-        html += "</tr>"
+            cells.append(
+                f'<td style="width:{cell_size}px;min-width:{cell_size}px;max-width:{cell_size}px;height:{cell_size}px;background:{bg};color:{color};font-weight:{weight};border:1px solid #cbd5e1;font-size:11px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;padding:0;text-align:center;vertical-align:middle;">'
+                f'{display_val}</td>'
+            )
+        rows_html.append(f'<tr style="height:{cell_size}px;">{"".join(cells)}</tr>')
 
-    html += """
-          </tbody>
-        </table>
-      </div>
+    table_content = "".join(rows_html)
+
+    full_html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{
+    background: transparent;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 6px;
+    display: flex;
+    justify-content: center;
+  }}
+  .matrix-wrapper {{
+    overflow-x: auto;
+    overflow-y: auto;
+    max-width: 100%;
+    padding: 8px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    display: inline-block;
+  }}
+  .matrix-box {{
+    width: {total_size}px;
+    height: {total_size}px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #ffffff;
+  }}
+  table {{
+    border-collapse: collapse;
+    table-layout: fixed;
+    width: {total_size}px;
+    height: {total_size}px;
+    text-align: center;
+  }}
+</style>
+</head>
+<body>
+  <div class="matrix-wrapper">
+    <div class="matrix-box">
+      <table>
+        <tbody>
+          {table_content}
+        </tbody>
+      </table>
     </div>
-    """
-    return html
+  </div>
+</body>
+</html>"""
+    return full_html, total_size
 
 
 def main():
@@ -453,8 +493,9 @@ def main():
     st.markdown("### Adjacency Matrix")
     st.caption("Uniform square box with equal-sized square partitions (Size L: 52px).")
 
-    matrix_html = render_uniform_square_matrix_html(data, matrix_type)
-    st.markdown(matrix_html, unsafe_allow_html=True)
+    matrix_html, total_size = render_uniform_square_matrix_html(data, matrix_type)
+    iframe_height = max(260, min(total_size + 60, 680))
+    components.html(matrix_html, height=iframe_height, scrolling=True)
 
     st.write("")
 
