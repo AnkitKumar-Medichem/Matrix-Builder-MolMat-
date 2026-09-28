@@ -1,4 +1,4 @@
-# Molecular Adjacency Matrix Visualizer (Streamlit)
+# MolMat
 
 A chemical graph theory web app for computing, visualizing, and analyzing molecular adjacency matrices and topological indices (Wiener index, Randic index, Zagreb indices) directly from SMILES chemical notations.
 

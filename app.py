@@ -336,12 +336,12 @@ def render_uniform_square_matrix_html(matrix_data, matrix_type: str):
 
 def main():
     st.set_page_config(
-        page_title="Molecular Adjacency Matrix Visualizer",
+        page_title="MolMat",
         layout="centered",
         initial_sidebar_state="collapsed"
     )
 
-    st.title("Molecular Adjacency Matrix Visualizer")
+    st.title("MolMat")
     st.markdown("Topological Graph Analysis & Weighted Adjacency Matrices for Organic Molecules.")
 
     # Preset selector
