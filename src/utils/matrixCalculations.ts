@@ -251,7 +251,8 @@ function buildRawMatrix(
         // Off-diagonal handling
         switch (matrixType) {
           case 'plain':
-            M[i][j] = isBonded ? 1 : 0;
+            // Core algorithm: 11-step MSF algorithm (step distances 1, 2, 3...)
+            M[i][j] = distanceMatrix[i][j] === Infinity ? 0 : distanceMatrix[i][j];
             break;
           case 'bond_order':
             M[i][j] = bondOrder;
@@ -476,25 +477,97 @@ function applyNormalization(
 }
 
 /**
- * Floyd-Warshall shortest path algorithm
+ * Core MSF (Molecular Structure Fingerprint / Matrix) Generation Algorithm:
+ * (1) Obtain the adjacency matrix (matrix initially containing only 0 and 1, and k is 1).
+ * (2) Identify atom pairs with the step size of k in the MSF and store the coordinates of matrix in the C (i.e., (i1, j1), (i2, j2), …), representing directly connected atoms pairs.
+ * (3) If the C is empty, indicating the current MSF has been fully generated, end the entire process, else continue to procedure (4).
+ * (4) Iterate through the C to get the element mj.
+ * (5) Find all atoms adjacent to atom index mj, and record them in the LMj (i.e., m1, m2, …).
+ * (6) If the LMj is empty, indicating there is no atom adjacent to atom index mh currently, continue to procedure (10), else continue to procedure (7).
+ * (7) Iterate through the LMj to get element mh.
+ * (8) Record the ai , h(i ≠ h) from MSF as sm i , m h.
+ * (9) If the sm i , m h is 0, indicating that the current position has never been filled before, fill the value of sm i , m h with k + 1, then proceed to procedure (6). If the sm i , m h is not 0, continue to procedure (6).
+ * (10) If the C is empty, indicating the traversal of current atom pairs with the step size of k in MSF is complete, continue to procedure (11), else continue to procedure (4).
+ * (11) k plus 1 and continue to procedure (1).
+ */
+export function computeMSFMatrix(graph: MoleculeGraph): number[][] {
+  const n = graph.atoms.length;
+
+  // (1) Obtain the adjacency matrix (matrix initially containing only 0 and 1, and k is 1)
+  const msf: number[][] = Array.from({ length: n }, () => new Array(n).fill(0));
+  const adj = new Map<number, number[]>();
+  for (let i = 0; i < n; i++) adj.set(i, []);
+
+  for (const b of graph.bonds) {
+    msf[b.source][b.target] = 1;
+    msf[b.target][b.source] = 1;
+    adj.get(b.source)!.push(b.target);
+    adj.get(b.target)!.push(b.source);
+  }
+
+  let k = 1;
+
+  while (true) {
+    // (2) Identify atom pairs with the step size of k in the MSF and store the coordinates of matrix in C
+    const C: [number, number][] = [];
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        if (msf[i][j] === k) {
+          C.push([i, j]);
+        }
+      }
+    }
+
+    // (3) If the C is empty, indicating the current MSF has been fully generated, end the entire process
+    if (C.length === 0) {
+      break;
+    }
+
+    // (4) Iterate through the C to get the element mj
+    for (const [i, mj] of C) {
+      // (5) Find all atoms adjacent to atom index mj, and record them in the LMj
+      const LMj = adj.get(mj) || [];
+
+      // (6) If the LMj is empty, continue to procedure (10)
+      if (LMj.length === 0) {
+        continue;
+      }
+
+      // (7) Iterate through the LMj to get element mh
+      for (const mh of LMj) {
+        // (8) Record the ai, h (i ≠ h) from MSF as sm i, mh
+        if (i !== mh) {
+          const sm_i_mh = msf[i][mh];
+          // (9) If the sm i, mh is 0, indicating that current position has never been filled, fill with k + 1
+          if (sm_i_mh === 0) {
+            msf[i][mh] = k + 1;
+          }
+        }
+      }
+    }
+
+    // (10) Traversal of current atom pairs with the step size of k in MSF is complete
+    // (11) k plus 1 and continue to procedure (1)
+    k = k + 1;
+  }
+
+  return msf;
+}
+
+/**
+ * Shortest path topological distance matrix computed using the core MSF algorithm
  */
 function computeShortestPaths(graph: MoleculeGraph): number[][] {
   const n = graph.atoms.length;
+  const msf = computeMSFMatrix(graph);
   const dist: number[][] = Array.from({ length: n }, () => new Array(n).fill(Infinity));
 
-  for (let i = 0; i < n; i++) dist[i][i] = 0;
-
-  for (const b of graph.bonds) {
-    dist[b.source][b.target] = 1;
-    dist[b.target][b.source] = 1;
-  }
-
-  for (let k = 0; k < n; k++) {
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < n; j++) {
-        if (dist[i][k] + dist[k][j] < dist[i][j]) {
-          dist[i][j] = dist[i][k] + dist[k][j];
-        }
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      if (i === j) {
+        dist[i][j] = 0;
+      } else if (msf[i][j] > 0) {
+        dist[i][j] = msf[i][j];
       }
     }
   }

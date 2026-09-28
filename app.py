@@ -38,11 +38,10 @@ PRESETS = [
 ]
 
 MATRIX_WEIGHTINGS = {
-    "plain": "Plain Binary Adjacency (Unweighted)",
-    "electronegativity": "Electronegativity Difference (|Δχ|)",
+    "plain": "Plain Adjacency Matrix",
     "bond_order": "Bond Order Weighted (Single=1, Double=2, Triple=3, Aromatic=1.5)",
-    "distance": "Topological Distance Matrix (Shortest Path)",
     "atomic_number": "Atomic Number Weighted (Z_i · Z_j)",
+    "electronegativity": "Electronegativity Difference (|Δχ|)",
     "laplacian": "Laplacian Matrix (L = D - A)"
 }
 
@@ -60,21 +59,77 @@ def parse_molecule(smiles_str: str):
         return None, str(e)
 
 
-def compute_shortest_paths(n_atoms: int, bonds: list):
-    """Computes all-pairs shortest path topological distance matrix (Floyd-Warshall)."""
-    dist = np.full((n_atoms, n_atoms), np.inf)
-    np.fill_diagonal(dist, 0)
-
+def compute_msf_matrix(n_atoms: int, bonds: list):
+    """
+    Core MSF (Molecular Structure Fingerprint / Matrix) Generation Algorithm:
+    (1) Obtain the adjacency matrix (matrix initially containing only 0 and 1, and k is 1).
+    (2) Identify atom pairs with the step size of k in the MSF and store the coordinates of matrix in the C (i.e., (i1, j1), (i2, j2), …), representing directly connected atoms pairs.
+    (3) If the C is empty, indicating the current MSF has been fully generated, end the entire process, else continue to procedure (4).
+    (4) Iterate through the C to get the element mj.
+    (5) Find all atoms adjacent to atom index mj, and record them in the LMj (i.e., m1, m2, …).
+    (6) If the LMj is empty, indicating there is no atom adjacent to atom index mh currently, continue to procedure (10), else continue to procedure (7).
+    (7) Iterate through the LMj to get element mh.
+    (8) Record the ai , h(i ≠ h) from MSF as sm i , m h.
+    (9) If the sm i , m h is 0, indicating that the current position has never been filled before, fill the value of sm i , m h with k + 1, then proceed to procedure (6). If the sm i , m h is not 0, continue to procedure (6).
+    (10) If the C is empty, indicating the traversal of current atom pairs with the step size of k in MSF is complete, continue to procedure (11), else continue to procedure (4).
+    (11) k plus 1 and continue to procedure (1).
+    """
+    # (1) Obtain the adjacency matrix (matrix initially containing only 0 and 1, and k is 1)
+    msf = np.zeros((n_atoms, n_atoms), dtype=int)
+    adj = {i: [] for i in range(n_atoms)}
     for u, v, _ in bonds:
-        dist[u, v] = 1
-        dist[v, u] = 1
+        msf[u, v] = 1
+        msf[v, u] = 1
+        adj[u].append(v)
+        adj[v].append(u)
 
-    for k in range(n_atoms):
+    k = 1
+    while True:
+        # (2) Identify atom pairs with the step size of k in the MSF and store coordinates in C
+        C = []
         for i in range(n_atoms):
             for j in range(n_atoms):
-                if dist[i, k] + dist[k, j] < dist[i, j]:
-                    dist[i, j] = dist[i, k] + dist[k, j]
+                if msf[i, j] == k:
+                    C.append((i, j))
 
+        # (3) If C is empty, indicating the current MSF has been fully generated, end the entire process
+        if not C:
+            break
+
+        # (4) Iterate through C to get element mj
+        for i, mj in C:
+            # (5) Find all atoms adjacent to atom index mj, and record them in LMj
+            LMj = adj.get(mj, [])
+
+            # (6) If LMj is empty, continue to (10)
+            if not LMj:
+                continue
+
+            # (7) Iterate through LMj to get element mh
+            for mh in LMj:
+                # (8) Record ai,h (i ≠ h) from MSF as sm i, mh
+                if i != mh:
+                    sm_i_mh = msf[i, mh]
+                    # (9) If sm i, mh is 0, fill value with k + 1
+                    if sm_i_mh == 0:
+                        msf[i, mh] = k + 1
+
+        # (10) Traversal of current atom pairs with step size k in MSF complete
+        # (11) k plus 1 and continue to procedure (1)
+        k += 1
+
+    return msf
+
+
+def compute_shortest_paths(n_atoms: int, bonds: list):
+    """Computes all-pairs topological distance matrix using the core MSF algorithm."""
+    msf = compute_msf_matrix(n_atoms, bonds)
+    dist = np.full((n_atoms, n_atoms), np.inf)
+    np.fill_diagonal(dist, 0)
+    for i in range(n_atoms):
+        for j in range(n_atoms):
+            if i != j and msf[i, j] > 0:
+                dist[i, j] = msf[i, j]
     return dist
 
 
@@ -107,9 +162,9 @@ def calculate_matrix_data(mol, matrix_type: str):
     matrix = np.zeros((n, n), dtype=float)
 
     if matrix_type == "plain":
-        for u, v, _ in bonds:
-            matrix[u, v] = 1.0
-            matrix[v, u] = 1.0
+        # Core 11-step MSF algorithm (step distances 1, 2, 3...)
+        msf = compute_msf_matrix(n, bonds)
+        matrix = msf.astype(float)
 
     elif matrix_type == "electronegativity":
         for u, v, _ in bonds:
@@ -123,12 +178,6 @@ def calculate_matrix_data(mol, matrix_type: str):
         for u, v, order in bonds:
             matrix[u, v] = order
             matrix[v, u] = order
-
-    elif matrix_type == "distance":
-        for i in range(n):
-            for j in range(n):
-                d = dist_matrix[i, j]
-                matrix[i, j] = d if np.isfinite(d) else 0.0
 
     elif matrix_type == "atomic_number":
         for u, v, _ in bonds:
@@ -164,6 +213,16 @@ def calculate_matrix_data(mol, matrix_type: str):
 
     first_zagreb = float(sum(d * d for d in degrees))
 
+    # Eigenvalues / Spectral profile
+    try:
+        if np.allclose(matrix, matrix.T):
+            eigenvals = np.linalg.eigvalsh(matrix)
+        else:
+            eigenvals = np.linalg.eigvals(matrix).real
+        eigenvals = np.sort(eigenvals)[::-1]
+    except Exception:
+        eigenvals = np.zeros(n)
+
     return {
         "atoms": atoms,
         "bonds": bonds,
@@ -174,6 +233,7 @@ def calculate_matrix_data(mol, matrix_type: str):
         "randic_index": randic_index,
         "first_zagreb": first_zagreb,
         "second_zagreb": second_zagreb,
+        "eigenvalues": eigenvals,
     }
 
 
@@ -239,11 +299,15 @@ def render_uniform_square_matrix_html(matrix_data, matrix_type: str):
         """
         for j in range(n):
             val = matrix[i, j]
-            is_active = (val > 0)
+            is_active = (abs(val) > 1e-6)
             if is_plain:
                 display_val = str(int(val))
+            elif abs(val - round(val)) < 1e-5:
+                display_val = str(int(round(val)))
+            elif abs(val * 2 - round(val * 2)) < 1e-5:
+                display_val = f"{val:.1f}"
             else:
-                display_val = f"{val:.2f}" if abs(val) >= 0.01 or val == 0 else f"{val:.3f}"
+                display_val = f"{val:.3f}"
 
             if is_active:
                 bg = "#dbeafe"  # blue-100
@@ -272,13 +336,12 @@ def render_uniform_square_matrix_html(matrix_data, matrix_type: str):
 
 def main():
     st.set_page_config(
-        page_title="Chemical Adjacency Matrix Visualizer",
-        page_icon="⚗️",
+        page_title="Molecular Adjacency Matrix Visualizer",
         layout="centered",
         initial_sidebar_state="collapsed"
     )
 
-    st.title("⚗️ Molecular Adjacency Matrix Visualizer")
+    st.title("Molecular Adjacency Matrix Visualizer")
     st.markdown("Topological Graph Analysis & Weighted Adjacency Matrices for Organic Molecules.")
 
     # Preset selector
@@ -302,15 +365,27 @@ def main():
             format_func=lambda k: MATRIX_WEIGHTINGS[k]
         )
 
-    mol, err = parse_molecule(smiles)
+    # Run button just below weighting technique panel
+    if st.button("Calculate Matrix", type="primary", key="btn_run"):
+        st.session_state["has_run"] = True
+        st.session_state["ran_smiles"] = smiles
+        st.session_state["ran_matrix_type"] = matrix_type
+
+    if not st.session_state.get("has_run", False):
+        return
+
+    cur_smiles = smiles
+    cur_matrix_type = matrix_type
+
+    mol, err = parse_molecule(cur_smiles)
     if err:
         st.error(err)
         return
 
-    data = calculate_matrix_data(mol, matrix_type)
+    data = calculate_matrix_data(mol, cur_matrix_type)
     n = len(data["atoms"])
     num_bonds = len(data["bonds"])
-    is_plain = (matrix_type == "plain")
+    is_plain = (cur_matrix_type == "plain")
 
     # Top badges summary
     st.markdown(
@@ -375,6 +450,35 @@ def main():
             help="Branching degree index: Σ 1/√(d_u · d_v)"
         )
 
+    st.write("")
+
+    # 4. Spectral Profile (Eigenvalue Spectrum Bar Chart)
+    st.markdown("### Spectral Profile (Eigenvalue Spectrum)")
+    st.caption("Bar chart of eigenvalues (λ₁ ≥ λ₂ ≥ … ≥ λₙ) of the current matrix representing the molecular spectral profile.")
+
+    eigenvalues = data.get("eigenvalues", [])
+    if len(eigenvalues) > 0:
+        spectral_radius = float(np.max(np.abs(eigenvalues)))
+        spectral_gap = float(eigenvalues[0] - eigenvalues[1]) if len(eigenvalues) >= 2 else 0.0
+        graph_energy = float(np.sum(np.abs(eigenvalues)))
+        trace = float(np.sum(eigenvalues))
+
+        sc1, sc2, sc3, sc4 = st.columns(4)
+        with sc1:
+            st.metric("Spectral Radius (ρ)", f"{spectral_radius:.3f}")
+        with sc2:
+            st.metric("Spectral Gap (Δλ)", f"{spectral_gap:.3f}")
+        with sc3:
+            st.metric("Graph Energy (E)", f"{graph_energy:.3f}")
+        with sc4:
+            st.metric("Matrix Trace", f"{trace:.3f}")
+
+        e_df = pd.DataFrame(
+            {"Eigenvalue (λ)": eigenvalues},
+            index=[f"λ{i+1}" for i in range(len(eigenvalues))]
+        )
+        st.bar_chart(e_df, use_container_width=True)
+
     # CSV Export Button
     df_matrix = pd.DataFrame(
         data["matrix"],
@@ -383,7 +487,7 @@ def main():
     )
     csv_bytes = df_matrix.to_csv().encode('utf-8')
     st.download_button(
-        label="📥 Export Matrix CSV",
+        label="Export Matrix as CSV",
         data=csv_bytes,
         file_name=f"matrix_{matrix_type}_{smiles}.csv",
         mime="text/csv",

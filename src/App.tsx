@@ -13,15 +13,16 @@
 import React, { useState, useMemo } from 'react';
 import { parseSmiles } from './utils/smilesParser';
 import { calculateMatrix } from './utils/matrixCalculations';
-import { MatrixType } from './types/chem';
+import { MatrixType, MoleculeGraph, MatrixResult } from './types/chem';
 import { CARBON_REF } from './utils/elements';
+import { EigenvalueBarChart } from './components/EigenvalueBarChart';
 
 const WEIGHTING_OPTIONS: { id: MatrixType; label: string; formula: string; description: string }[] = [
   {
     id: 'plain',
-    label: 'None (Plain Adjacency)',
-    formula: 'A[i, j] = 1 if bonded, 0 otherwise',
-    description: 'Binary adjacency matrix showing atomic connectivity',
+    label: 'None (Plain Adjacency Matrix)',
+    formula: 'A[i, j] = Step distance (0 on diagonal)',
+    description: 'Core molecular adjacency matrix showing topological atomic connectivity and distances',
   },
   {
     id: 'bond_order',
@@ -30,22 +31,34 @@ const WEIGHTING_OPTIONS: { id: MatrixType; label: string; formula: string; descr
     description: 'Weights edges by covalent bond multiplicity',
   },
   {
+    id: 'atomic_number_prod',
+    label: 'Atomic Number Product (Z_i · Z_j)',
+    formula: 'A[i, j] = Z_i · Z_j for bonded pairs',
+    description: 'Nuclear charge product (e.g. C-C = 36, C-N = 42, C-O = 48)',
+  },
+  {
+    id: 'atomic_radius_sum',
+    label: 'Covalent Radius Sum (r_i + r_j)',
+    formula: 'A[i, j] = r_cov(i) + r_cov(j) (pm)',
+    description: 'Sum of atomic covalent radii in picometers (e.g. C-C = 152 pm)',
+  },
+  {
+    id: 'electronegativity_diff',
+    label: 'Electronegativity Difference (|Δχ|)',
+    formula: 'A[i, j] = |χ_i - χ_j| for bonded pairs',
+    description: 'Pauling electronegativity difference measuring bond polarity',
+  },
+  {
+    id: 'laplacian',
+    label: 'Degree Laplacian (L = D - A)',
+    formula: 'L[i, i] = deg(i), L[i, j] = -1 if bonded',
+    description: 'Graph Laplacian for spectral analysis and algebraic connectivity',
+  },
+  {
     id: 'covalent_radius_rel_carbon',
     label: 'Covalent Radius (rel. Carbon)',
     formula: 'A[i, j] = ((r_i + r_j)/2) / r_cov(C)',
     description: `Mean covalent radius of bonded atoms normalized to Carbon (${CARBON_REF.covalentRadius} pm)`,
-  },
-  {
-    id: 'vdw_radius_rel_carbon',
-    label: 'Van der Waals Radius (rel. Carbon)',
-    formula: 'A[i, j] = ((r_vdw_i + r_vdw_j)/2) / r_vdw(C)',
-    description: `Mean van der Waals radius of bonded atoms normalized to Carbon (${CARBON_REF.vdwRadius} pm)`,
-  },
-  {
-    id: 'atomic_mass_rel_carbon',
-    label: 'Atomic Mass (rel. Carbon)',
-    formula: 'A[i, j] = ((m_i + m_j)/2) / m(C)',
-    description: `Mean atomic mass of bonded atoms normalized to Carbon (${CARBON_REF.atomicMass} Da)`,
   },
   {
     id: 'electronegativity_rel_carbon',
@@ -53,49 +66,83 @@ const WEIGHTING_OPTIONS: { id: MatrixType; label: string; formula: string; descr
     formula: 'A[i, j] = ((χ_i + χ_j)/2) / χ(C)',
     description: `Mean Pauling electronegativity of bonded atoms normalized to Carbon (${CARBON_REF.electronegativity})`,
   },
-  {
-    id: 'polarizability_rel_carbon',
-    label: 'Polarizability (rel. Carbon)',
-    formula: 'A[i, j] = ((α_i + α_j)/2) / α(C)',
-    description: `Mean atomic polarizability of bonded atoms normalized to Carbon (${CARBON_REF.polarizability} Å³)`,
-  },
 ];
 
 export default function App() {
   const [smiles, setSmiles] = useState<string>('c1ccccc1');
   const [weighting, setWeighting] = useState<MatrixType>('plain');
+  const [hasRun, setHasRun] = useState<boolean>(false);
   const partitionSize = 52; // Fixed to L size
   const [hoveredCell, setHoveredCell] = useState<{ row: number; col: number } | null>(null);
 
-  // Parse SMILES string into molecular graph
-  const { graph, error } = useMemo(() => {
+  // Calculation state: only calculated and generated after clicking "Run"
+  const [calculation, setCalculation] = useState<{
+    graph: MoleculeGraph | null;
+    matrixResult: MatrixResult | null;
+    error: string | null;
+    weighting: MatrixType;
+  } | null>(null);
+
+  const performCalculation = (smilesInput: string, matrixWeighting: MatrixType) => {
     try {
-      const trimmed = smiles.trim();
+      const trimmed = smilesInput.trim();
       if (!trimmed) {
-        return { graph: null, error: 'Please enter a SMILES string' };
+        setCalculation({
+          graph: null,
+          matrixResult: null,
+          error: 'Please enter a SMILES string',
+          weighting: matrixWeighting,
+        });
+        return;
       }
       const g = parseSmiles(trimmed, { includeHydrogens: false });
-      return { graph: g, error: null };
+      const mResult = calculateMatrix(g, matrixWeighting, 'none');
+      setCalculation({
+        graph: g,
+        matrixResult: mResult,
+        error: null,
+        weighting: matrixWeighting,
+      });
     } catch (err: any) {
-      return { graph: null, error: err.message || 'Invalid SMILES string' };
+      setCalculation({
+        graph: null,
+        matrixResult: null,
+        error: err.message || 'Invalid SMILES string',
+        weighting: matrixWeighting,
+      });
     }
-  }, [smiles]);
+  };
 
-  // Matrix calculation based on selected weighting technique
-  const matrixResult = useMemo(() => {
-    if (!graph) return null;
-    return calculateMatrix(graph, weighting, 'none');
-  }, [graph, weighting]);
+  const handleRun = () => {
+    setHasRun(true);
+    performCalculation(smiles, weighting);
+  };
 
-  const activeWeightingOpt = WEIGHTING_OPTIONS.find((opt) => opt.id === weighting) || WEIGHTING_OPTIONS[0];
-  const isPlain = weighting === 'plain';
+  const handleWeightingSelect = (newWeighting: MatrixType) => {
+    setWeighting(newWeighting);
+    // If output is already active on the screen, immediately recalculate with the new weighting
+    if (hasRun) {
+      performCalculation(smiles, newWeighting);
+    }
+  };
+
+  const graph = calculation?.graph ?? null;
+  const matrixResult = calculation?.matrixResult ?? null;
+  const error = calculation?.error ?? null;
+  const currentWeighting = calculation?.weighting ?? weighting;
+  const activeWeightingOpt = WEIGHTING_OPTIONS.find((opt) => opt.id === (calculation ? currentWeighting : weighting)) || WEIGHTING_OPTIONS[0];
+  const isPlain = currentWeighting === 'plain';
 
   // Format matrix cell value
   const formatCellValue = (val: number): string => {
-    if (val === 0) return '0';
-    if (isPlain) return '1';
-    if (weighting === 'bond_order') {
-      return val % 1 === 0 ? val.toString() : val.toFixed(1);
+    if (Math.abs(val) < 1e-9) return '0';
+    // Clean integers (e.g. 1, 2, 3, 36, 152, -1)
+    if (Math.abs(val - Math.round(val)) < 1e-6) {
+      return Math.round(val).toString();
+    }
+    // Half-integers (e.g. 1.5 for aromatic bond order)
+    if (Math.abs(val * 2 - Math.round(val * 2)) < 1e-6) {
+      return val.toFixed(1);
     }
     return val.toFixed(3);
   };
@@ -119,7 +166,7 @@ export default function App() {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    const filename = `molmat_${graph.canonicalFormula || 'matrix'}_${weighting}.csv`;
+    const filename = `molmat_${graph.canonicalFormula || 'matrix'}_${currentWeighting}.csv`;
     link.setAttribute('href', url);
     link.setAttribute('download', filename);
     document.body.appendChild(link);
@@ -163,13 +210,6 @@ export default function App() {
               </button>
             )}
           </div>
-
-          {/* Error Message */}
-          {error && (
-            <div className="p-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md mt-2">
-              {error}
-            </div>
-          )}
         </div>
 
         {/* Weighting Technique Selector (Optional, Plain by default) */}
@@ -182,7 +222,7 @@ export default function App() {
               <select
                 id="weighting-select"
                 value={weighting}
-                onChange={(e) => setWeighting(e.target.value as MatrixType)}
+                onChange={(e) => handleWeightingSelect(e.target.value as MatrixType)}
                 className="px-3 py-1.5 text-xs font-medium border border-gray-300 rounded-md bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {WEIGHTING_OPTIONS.map((opt) => (
@@ -194,7 +234,7 @@ export default function App() {
               {!isPlain && (
                 <button
                   type="button"
-                  onClick={() => setWeighting('plain')}
+                  onClick={() => handleWeightingSelect('plain')}
                   className="text-xs text-blue-600 hover:underline"
                 >
                   Reset to Plain
@@ -205,10 +245,28 @@ export default function App() {
           <div className="text-xs text-gray-500 flex flex-wrap items-center gap-2 font-mono">
             <span className="text-gray-700 font-semibold">{activeWeightingOpt.label}:</span>
             <span>{activeWeightingOpt.formula}</span>
-            <span className="text-gray-400">·</span>
+            <span className="text-gray-400">|</span>
             <span className="text-gray-600">{activeWeightingOpt.description}</span>
           </div>
         </div>
+
+        {/* Run Button */}
+        <div>
+          <button
+            type="button"
+            onClick={handleRun}
+            className="px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-md shadow-xs transition-colors cursor-pointer"
+          >
+            Run
+          </button>
+        </div>
+
+        {/* Error Message (shown only after clicking Run) */}
+        {error && (
+          <div className="p-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md">
+            {error}
+          </div>
+        )}
 
         {/* Molecular Info Badge */}
         {graph && !error && (
@@ -329,18 +387,15 @@ export default function App() {
                     Adjacency Matrix ({matrixResult.dim} × {matrixResult.dim})
                   </h2>
                   <span className="text-xs font-mono text-gray-500">
-                    {isPlain ? '1 = Connected, 0 = Not connected' : activeWeightingOpt.label}
+                    {isPlain ? 'Topological step distances (0 on diagonal)' : activeWeightingOpt.label}
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={handleExportCSV}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded shadow-2xs hover:text-blue-600 transition-colors cursor-pointer self-start sm:self-auto"
+                  className="px-3 py-1 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded shadow-2xs hover:text-blue-600 transition-colors cursor-pointer self-start sm:self-auto"
                   title="Download matrix as CSV file"
                 >
-                  <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
                   Export CSV
                 </button>
               </div>
@@ -503,19 +558,19 @@ export default function App() {
                       {isPlain ? matrixResult.matrixSum.toString() : matrixResult.matrixSum.toFixed(3)}
                     </div>
                     <div className="text-[10px] text-gray-400 font-sans mt-0.5">
-                      Sum of all elements in current matrix
+                      Sum of all matrix elements
                     </div>
                   </div>
 
                   <div className="bg-white p-2 rounded border border-gray-200 shadow-2xs">
                     <div className="text-[10px] text-gray-500 uppercase tracking-wider font-sans">
-                      Upper Triangle (Σ_{'{i<j}'})
+                      Upper Triangle Sum (i &lt; j)
                     </div>
                     <div className="text-base font-bold text-gray-900">
                       {isPlain ? matrixResult.halfSum.toString() : matrixResult.halfSum.toFixed(3)}
                     </div>
                     <div className="text-[10px] text-gray-400 font-sans mt-0.5">
-                      {isPlain ? 'Total bonds in molecule' : 'Half-sum of symmetric matrix'}
+                      {isPlain ? 'Half-sum of symmetric step distances' : 'Half-sum of symmetric matrix'}
                     </div>
                   </div>
 
@@ -527,19 +582,19 @@ export default function App() {
                       {matrixResult.wienerIndex}
                     </div>
                     <div className="text-[10px] text-gray-400 font-sans mt-0.5">
-                      Sum of all topological distances (size & compactness)
+                      Sum of shortest topological distances
                     </div>
                   </div>
 
                   <div className="bg-white p-2 rounded border border-gray-200 shadow-2xs">
                     <div className="text-[10px] text-gray-500 uppercase tracking-wider font-sans">
-                      Randić Index (χ)
+                      Randic Index (R)
                     </div>
                     <div className="text-base font-bold text-purple-700">
                       {matrixResult.randicIndex.toFixed(3)}
                     </div>
                     <div className="text-[10px] text-gray-400 font-sans mt-0.5">
-                      Branching degree index: Σ 1/√(d_u · d_v)
+                      Branching index: Σ 1/√(deg_u × deg_v)
                     </div>
                   </div>
                 </div>
@@ -557,8 +612,8 @@ export default function App() {
                   <div>
                     {(matrixResult.matrix[hoveredCell.row]?.[hoveredCell.col] ?? 0) > 0 ? (
                       <span className="text-green-700 font-medium">
-                        Bonded: {graph.atoms[hoveredCell.row]?.symbol}
-                        {hoveredCell.row} — {graph.atoms[hoveredCell.col]?.symbol}
+                        Atoms: {graph.atoms[hoveredCell.row]?.symbol}
+                        {hoveredCell.row} - {graph.atoms[hoveredCell.col]?.symbol}
                         {hoveredCell.col}
                         {!isPlain && ` (${activeWeightingOpt.label})`}
                       </span>
@@ -566,7 +621,7 @@ export default function App() {
                       <span className="text-gray-500">Diagonal entry: 0</span>
                     ) : (
                       <span className="text-gray-500">
-                        No direct bond between {graph.atoms[hoveredCell.row]?.symbol}
+                        Zero entry between {graph.atoms[hoveredCell.row]?.symbol}
                         {hoveredCell.row} and {graph.atoms[hoveredCell.col]?.symbol}
                         {hoveredCell.col}
                       </span>
@@ -575,6 +630,12 @@ export default function App() {
                 </div>
               )}
             </div>
+
+            {/* Eigenvalue Spectrum / Spectral Profile Bar Chart */}
+            <EigenvalueBarChart
+              eigenvalues={matrixResult.eigenvalues}
+              matrixTypeLabel={activeWeightingOpt.label}
+            />
           </div>
         )}
       </div>
