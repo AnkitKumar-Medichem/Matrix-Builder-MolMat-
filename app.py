@@ -14,8 +14,10 @@ try:
     from rdkit.Chem import Draw
     from rdkit.Chem.Draw import rdMolDraw2D
     HAS_RDKIT = True
-except ImportError:
+    RDKIT_IMPORT_ERROR = None
+except Exception as e:
     HAS_RDKIT = False
+    RDKIT_IMPORT_ERROR = str(e)
 
 # Pauling Electronegativities
 ELECTRONEGATIVITY = {
@@ -49,7 +51,12 @@ MATRIX_WEIGHTINGS = {
 def parse_molecule(smiles_str: str):
     """Parses a SMILES string into atom and bond graph representation."""
     if not HAS_RDKIT:
-        return None, "RDKit is not installed. Please add rdkit to requirements.txt."
+        msg = "RDKit is not installed or could not be loaded."
+        if RDKIT_IMPORT_ERROR:
+            msg += f" Details: {RDKIT_IMPORT_ERROR}. Ensure 'rdkit' is in requirements.txt and 'libxrender1', 'libxext6' are in packages.txt."
+        else:
+            msg += " Please ensure 'rdkit' is in requirements.txt and 'libxrender1', 'libxext6' are in packages.txt."
+        return None, msg
     try:
         mol = Chem.MolFromSmiles(smiles_str)
         if mol is None:

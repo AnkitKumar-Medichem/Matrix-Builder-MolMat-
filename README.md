@@ -15,12 +15,17 @@ A chemical graph theory web app for computing, visualizing, and analyzing molecu
 
 ## Requirements
 - Python 3.10+
-- `streamlit>=1.35.0`
-- `rdkit>=2023.9.5`
-- `pandas>=2.0.0`
-- `numpy>=1.24.0`
-- `matplotlib>=3.7.0`
-- `seaborn>=0.12.0`
+- Python packages (`requirements.txt`):
+  - `streamlit>=1.35.0`
+  - `rdkit`
+  - `pandas>=2.0.0`
+  - `numpy>=1.24.0`
+  - `Pillow>=9.5.0`
+  - `matplotlib>=3.7.0`
+  - `seaborn>=0.12.0`
+- Linux packages (`packages.txt` for Streamlit Cloud):
+  - `libxrender1`
+  - `libxext6`
 
 ## Features
 - **SMILES Input & Presets**: Benzene, Pyridine, Aspirin, Caffeine, Ethanol, Toluene, Acetone.
