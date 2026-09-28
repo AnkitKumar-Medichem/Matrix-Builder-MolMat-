@@ -11,7 +11,7 @@ import streamlit as st
 # Check for RDKit
 try:
     from rdkit import Chem
-    from rdkit.Chem import Draw
+    from rdkit.Chem import Draw, rdMolDescriptors
     from rdkit.Chem.Draw import rdMolDraw2D
     HAS_RDKIT = True
     RDKIT_IMPORT_ERROR = None
@@ -64,6 +64,36 @@ def parse_molecule(smiles_str: str):
         return mol, None
     except Exception as e:
         return None, str(e)
+
+
+def get_mol_formula(mol):
+    """Safely calculates the Hill system molecular formula."""
+    if mol is None:
+        return ""
+    try:
+        return rdMolDescriptors.CalcMolFormula(mol)
+    except Exception:
+        pass
+    try:
+        counts = {}
+        for atom in mol.GetAtoms():
+            sym = atom.GetSymbol()
+            counts[sym] = counts.get(sym, 0) + 1
+            h_count = atom.GetTotalNumHs()
+            if h_count > 0:
+                counts['H'] = counts.get('H', 0) + h_count
+        parts = []
+        if 'C' in counts:
+            parts.append(f"C{counts['C']}" if counts['C'] > 1 else "C")
+            del counts['C']
+            if 'H' in counts:
+                parts.append(f"H{counts['H']}" if counts['H'] > 1 else "H")
+                del counts['H']
+        for sym in sorted(counts.keys()):
+            parts.append(f"{sym}{counts[sym]}" if counts[sym] > 1 else sym)
+        return "".join(parts)
+    except Exception:
+        return ""
 
 
 def compute_msf_matrix(n_atoms: int, bonds: list):
@@ -398,7 +428,7 @@ def main():
     st.markdown(
         f"""
         <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 14px; border-radius: 6px; font-size: 13px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 1rem;">
-            <span>Formula: <strong>{Chem.rdMolDescriptors.CalcMolFormula(mol)}</strong></span>
+            <span>Formula: <strong>{get_mol_formula(mol)}</strong></span>
             <span style="color: #cbd5e1;">|</span>
             <span>Atoms: <strong>{n}</strong></span>
             <span style="color: #cbd5e1;">|</span>
