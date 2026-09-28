@@ -30,6 +30,19 @@ ELECTRONEGATIVITY = {
     'Br': 2.96, 'Kr': 3.00, 'I': 2.66
 }
 
+# Covalent Radii in picometers (pm)
+COVALENT_RADIUS = {
+    'H': 31, 'He': 28,
+    'Li': 128, 'Be': 96, 'B': 84, 'C': 76, 'N': 71, 'O': 66, 'F': 57, 'Ne': 58,
+    'Na': 166, 'Mg': 141, 'Al': 121, 'Si': 111, 'P': 107, 'S': 105, 'Cl': 102, 'Ar': 106,
+    'K': 203, 'Ca': 176, 'Sc': 170, 'Ti': 160, 'V': 153, 'Cr': 139, 'Mn': 139, 'Fe': 132,
+    'Co': 126, 'Ni': 124, 'Cu': 132, 'Zn': 122, 'Ga': 122, 'Ge': 120, 'As': 119, 'Se': 120,
+    'Br': 120, 'Kr': 116, 'I': 139
+}
+
+CARBON_REF_RADIUS = 76.0  # Reference Carbon covalent radius in pm
+CARBON_REF_EN = 2.55      # Reference Carbon Pauling electronegativity
+
 PRESETS = [
     {"name": "Benzene", "smiles": "c1ccccc1"},
     {"name": "Pyridine", "smiles": "c1ccncc1"},
@@ -41,11 +54,14 @@ PRESETS = [
 ]
 
 MATRIX_WEIGHTINGS = {
-    "plain": "Plain Adjacency Matrix",
-    "bond_order": "Bond Order Weighted (Single=1, Double=2, Triple=3, Aromatic=1.5)",
-    "atomic_number": "Atomic Number Weighted (Z_i · Z_j)",
-    "electronegativity": "Electronegativity Difference (|Δχ|)",
-    "laplacian": "Laplacian Matrix (L = D - A)"
+    "plain": "None (Plain Adjacency Matrix)",
+    "bond_order": "Bond Order",
+    "atomic_number_prod": "Atomic Number Product (Z_i · Z_j)",
+    "atomic_radius_sum": "Covalent Radius Sum (r_i + r_j)",
+    "electronegativity_diff": "Electronegativity Difference (|Δχ|)",
+    "laplacian": "Degree Laplacian (L = D - A)",
+    "covalent_radius_rel_carbon": "Covalent Radius (rel. Carbon)",
+    "electronegativity_rel_carbon": "Pauling Electronegativity (rel. Carbon)"
 }
 
 
@@ -204,7 +220,26 @@ def calculate_matrix_data(mol, matrix_type: str):
         msf = compute_msf_matrix(n, bonds)
         matrix = msf.astype(float)
 
-    elif matrix_type == "electronegativity":
+    elif matrix_type == "bond_order":
+        for u, v, order in bonds:
+            matrix[u, v] = order
+            matrix[v, u] = order
+
+    elif matrix_type in ("atomic_number_prod", "atomic_number"):
+        for u, v, _ in bonds:
+            z_prod = float(atoms[u]["z"] * atoms[v]["z"])
+            matrix[u, v] = z_prod
+            matrix[v, u] = z_prod
+
+    elif matrix_type == "atomic_radius_sum":
+        for u, v, _ in bonds:
+            r_u = COVALENT_RADIUS.get(atoms[u]["symbol"], 76.0)
+            r_v = COVALENT_RADIUS.get(atoms[v]["symbol"], 76.0)
+            r_sum = float(r_u + r_v)
+            matrix[u, v] = r_sum
+            matrix[v, u] = r_sum
+
+    elif matrix_type in ("electronegativity_diff", "electronegativity"):
         for u, v, _ in bonds:
             chi_u = ELECTRONEGATIVITY.get(atoms[u]["symbol"], 2.5)
             chi_v = ELECTRONEGATIVITY.get(atoms[v]["symbol"], 2.5)
@@ -212,23 +247,28 @@ def calculate_matrix_data(mol, matrix_type: str):
             matrix[u, v] = diff
             matrix[v, u] = diff
 
-    elif matrix_type == "bond_order":
-        for u, v, order in bonds:
-            matrix[u, v] = order
-            matrix[v, u] = order
-
-    elif matrix_type == "atomic_number":
-        for u, v, _ in bonds:
-            z_prod = atoms[u]["z"] * atoms[v]["z"]
-            matrix[u, v] = z_prod
-            matrix[v, u] = z_prod
-
     elif matrix_type == "laplacian":
         for u, v, _ in bonds:
             matrix[u, v] = -1.0
             matrix[v, u] = -1.0
         for i in range(n):
-            matrix[i, i] = degrees[i]
+            matrix[i, i] = float(degrees[i])
+
+    elif matrix_type == "covalent_radius_rel_carbon":
+        for u, v, _ in bonds:
+            r_u = COVALENT_RADIUS.get(atoms[u]["symbol"], 76.0)
+            r_v = COVALENT_RADIUS.get(atoms[v]["symbol"], 76.0)
+            val = round(((r_u + r_v) / 2.0) / CARBON_REF_RADIUS, 3)
+            matrix[u, v] = val
+            matrix[v, u] = val
+
+    elif matrix_type == "electronegativity_rel_carbon":
+        for u, v, _ in bonds:
+            chi_u = ELECTRONEGATIVITY.get(atoms[u]["symbol"], 2.5)
+            chi_v = ELECTRONEGATIVITY.get(atoms[v]["symbol"], 2.5)
+            val = round(((chi_u + chi_v) / 2.0) / CARBON_REF_EN, 3)
+            matrix[u, v] = val
+            matrix[v, u] = val
 
     # Invariants
     matrix_sum = float(np.sum(matrix))
@@ -348,7 +388,7 @@ def render_uniform_square_matrix_html(matrix_data, matrix_type: str):
                 weight = "normal"
 
             cells.append(
-                f'<td style="width:{cell_size}px;min-width:{cell_size}px;max-width:{cell_size}px;height:{cell_size}px;background:{bg};color:{color};font-weight:{weight};border:1px solid #cbd5e1;font-size:11px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;padding:0;text-align:center;vertical-align:middle;">'
+                f'<td id="cell-{i}-{j}" data-row="{i}" data-col="{j}" data-val="{display_val}" data-label="{atom["symbol"]}{i} - {atoms[j]["symbol"]}{j}" tabindex="{0 if (i==0 and j==0) else -1}" onclick="selectCell({i},{j})" onfocus="selectCell({i},{j})" style="width:{cell_size}px;min-width:{cell_size}px;max-width:{cell_size}px;height:{cell_size}px;background:{bg};color:{color};font-weight:{weight};border:1px solid #cbd5e1;font-size:11px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;padding:0;text-align:center;vertical-align:middle;cursor:pointer;outline:none;" title="A[{i},{j}] = {display_val} ({atom["symbol"]}{i} - {atoms[j]["symbol"]}{j})">'
                 f'{display_val}</td>'
             )
         rows_html.append(f'<tr style="height:{cell_size}px;">{"".join(cells)}</tr>')
@@ -366,7 +406,8 @@ def render_uniform_square_matrix_html(matrix_data, matrix_type: str):
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     padding: 6px;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
   }}
   .matrix-wrapper {{
     overflow-x: auto;
@@ -377,6 +418,7 @@ def render_uniform_square_matrix_html(matrix_data, matrix_type: str):
     border: 1px solid #e2e8f0;
     border-radius: 8px;
     display: inline-block;
+    outline: none;
   }}
   .matrix-box {{
     width: {total_size}px;
@@ -394,10 +436,42 @@ def render_uniform_square_matrix_html(matrix_data, matrix_type: str):
     height: {total_size}px;
     text-align: center;
   }}
+  td.active-cell {{
+    background: #2563eb !important;
+    color: #ffffff !important;
+    font-weight: bold !important;
+    outline: 2px solid #1d4ed8 !important;
+    outline-offset: -2px;
+  }}
+  .keyboard-guide {{
+    margin-top: 8px;
+    font-size: 11px;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    max-width: {max(total_size, 380)}px;
+  }}
+  .key-badge {{
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: monospace;
+    font-size: 10px;
+    font-weight: bold;
+    color: #334155;
+  }}
+  #cell-info {{
+    font-family: monospace;
+    font-weight: 600;
+    color: #1e40af;
+  }}
 </style>
 </head>
 <body>
-  <div class="matrix-wrapper">
+  <div class="matrix-wrapper" tabindex="0" id="matrix-container" title="Use Arrow Keys to navigate matrix">
     <div class="matrix-box">
       <table>
         <tbody>
@@ -406,6 +480,48 @@ def render_uniform_square_matrix_html(matrix_data, matrix_type: str):
       </table>
     </div>
   </div>
+  <div class="keyboard-guide">
+    <div>
+      <span class="key-badge">↑</span>
+      <span class="key-badge">↓</span>
+      <span class="key-badge">←</span>
+      <span class="key-badge">→</span>
+      <span style="margin-left: 4px;">Arrow keys to navigate</span>
+    </div>
+    <div id="cell-info">A[0, 0]</div>
+  </div>
+  <script>
+    let curR = 0, curC = 0;
+    const n = {n};
+    function selectCell(r, c) {{
+      curR = Math.max(0, Math.min(n - 1, r));
+      curC = Math.max(0, Math.min(n - 1, c));
+      document.querySelectorAll('td[data-row]').forEach(el => el.classList.remove('active-cell'));
+      const target = document.getElementById('cell-' + curR + '-' + curC);
+      if (target) {{
+        target.classList.add('active-cell');
+        target.focus();
+        target.scrollIntoView({{ block: 'nearest', inline: 'nearest' }});
+        const info = document.getElementById('cell-info');
+        if (info) {{
+          info.textContent = 'A[' + curR + ', ' + curC + '] = ' + target.getAttribute('data-val') + ' (' + target.getAttribute('data-label') + ')';
+        }}
+      }}
+    }}
+    window.addEventListener('keydown', function(e) {{
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) {{
+        e.preventDefault();
+        if (e.key === 'ArrowUp') selectCell(curR - 1, curC);
+        else if (e.key === 'ArrowDown') selectCell(curR + 1, curC);
+        else if (e.key === 'ArrowLeft') selectCell(curR, curC - 1);
+        else if (e.key === 'ArrowRight') selectCell(curR, curC + 1);
+        else if (e.key === 'Home') selectCell(curR, 0);
+        else if (e.key === 'End') selectCell(curR, n - 1);
+      }}
+    }});
+    // Initialize first cell
+    setTimeout(() => selectCell(0, 0), 50);
+  </script>
 </body>
 </html>"""
     return full_html, total_size
@@ -432,18 +548,20 @@ def main():
     if "smiles_input" not in st.session_state:
         st.session_state["smiles_input"] = "c1ccccc1"
 
-    col_input, col_type = st.columns([2, 2])
-    with col_input:
-        smiles = st.text_input("Enter SMILES String:", value=st.session_state["smiles_input"])
-    with col_type:
-        matrix_type = st.selectbox(
-            "Matrix Weighting:",
-            options=list(MATRIX_WEIGHTINGS.keys()),
-            format_func=lambda k: MATRIX_WEIGHTINGS[k]
-        )
+    with st.form("smiles_calc_form", clear_on_submit=False):
+        col_input, col_type = st.columns([2, 2])
+        with col_input:
+            smiles = st.text_input("Enter SMILES String:", value=st.session_state["smiles_input"], key="input_smiles")
+        with col_type:
+            matrix_type = st.selectbox(
+                "Matrix Weighting:",
+                options=list(MATRIX_WEIGHTINGS.keys()),
+                format_func=lambda k: MATRIX_WEIGHTINGS[k],
+                key="select_matrix_type"
+            )
+        run_submitted = st.form_submit_button("Calculate Matrix (Press Enter ↵)", type="primary")
 
-    # Run button just below weighting technique panel
-    if st.button("Calculate Matrix", type="primary", key="btn_run"):
+    if run_submitted:
         st.session_state["has_run"] = True
         st.session_state["ran_smiles"] = smiles
         st.session_state["ran_matrix_type"] = matrix_type
@@ -451,8 +569,8 @@ def main():
     if not st.session_state.get("has_run", False):
         return
 
-    cur_smiles = smiles
-    cur_matrix_type = matrix_type
+    cur_smiles = st.session_state.get("ran_smiles", smiles)
+    cur_matrix_type = st.session_state.get("ran_matrix_type", matrix_type)
 
     mol, err = parse_molecule(cur_smiles)
     if err:
@@ -491,10 +609,9 @@ def main():
 
     # 2. Adjacency Matrix (PLOTTED BELOW THE STRUCTURE)
     st.markdown("### Adjacency Matrix")
-    st.caption("Uniform square box with equal-sized square partitions (Size L: 52px).")
 
-    matrix_html, total_size = render_uniform_square_matrix_html(data, matrix_type)
-    iframe_height = max(260, min(total_size + 60, 680))
+    matrix_html, total_size = render_uniform_square_matrix_html(data, cur_matrix_type)
+    iframe_height = max(300, min(total_size + 90, 720))
     components.html(matrix_html, height=iframe_height, scrolling=True)
 
     st.write("")

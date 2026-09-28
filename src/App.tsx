@@ -74,6 +74,7 @@ export default function App() {
   const [hasRun, setHasRun] = useState<boolean>(false);
   const partitionSize = 52; // Fixed to L size
   const [hoveredCell, setHoveredCell] = useState<{ row: number; col: number } | null>(null);
+  const [selectedCell, setSelectedCell] = useState<{ row: number; col: number } | null>(null);
 
   // Calculation state: only calculated and generated after clicking "Run"
   const [calculation, setCalculation] = useState<{
@@ -103,6 +104,8 @@ export default function App() {
         error: null,
         weighting: matrixWeighting,
       });
+      // Default keyboard selected cell to [0, 0] on successful calculation
+      setSelectedCell({ row: 0, col: 0 });
     } catch (err: any) {
       setCalculation({
         graph: null,
@@ -116,6 +119,54 @@ export default function App() {
   const handleRun = () => {
     setHasRun(true);
     performCalculation(smiles, weighting);
+  };
+
+  const handleTableKeyDown = (e: React.KeyboardEvent) => {
+    if (!graph || !matrixResult) return;
+    const n = graph.atoms.length;
+    if (n === 0) return;
+
+    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) {
+      return;
+    }
+
+    e.preventDefault();
+    const current = selectedCell || hoveredCell || { row: 0, col: 0 };
+    let newRow = current.row;
+    let newCol = current.col;
+
+    switch (e.key) {
+      case 'ArrowUp':
+        newRow = Math.max(0, current.row - 1);
+        break;
+      case 'ArrowDown':
+        newRow = Math.min(n - 1, current.row + 1);
+        break;
+      case 'ArrowLeft':
+        newCol = Math.max(0, current.col - 1);
+        break;
+      case 'ArrowRight':
+        newCol = Math.min(n - 1, current.col + 1);
+        break;
+      case 'Home':
+        newCol = 0;
+        break;
+      case 'End':
+        newCol = n - 1;
+        break;
+      default:
+        return;
+    }
+
+    setSelectedCell({ row: newRow, col: newCol });
+    setHoveredCell({ row: newRow, col: newCol });
+
+    // Focus cell in DOM
+    const cellEl = document.getElementById(`matrix-cell-${newRow}-${newCol}`);
+    if (cellEl) {
+      cellEl.focus();
+      cellEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
   };
 
   const handleWeightingSelect = (newWeighting: MatrixType) => {
@@ -196,6 +247,12 @@ export default function App() {
               type="text"
               value={smiles}
               onChange={(e) => setSmiles(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleRun();
+                }
+              }}
               placeholder="e.g. c1ccccc1, CCO, CC(=O)O"
               className="flex-1 px-4 py-2.5 text-sm font-mono border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 shadow-xs"
               spellCheck={false}
@@ -255,9 +312,13 @@ export default function App() {
           <button
             type="button"
             onClick={handleRun}
-            className="px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-md shadow-xs transition-colors cursor-pointer"
+            className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-md shadow-xs transition-colors cursor-pointer"
+            title="Calculate matrix (or press Enter in SMILES input)"
           >
-            Run
+            <span>Run</span>
+            <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-normal bg-blue-700 text-blue-100 rounded border border-blue-500/50">
+              Enter ↵
+            </kbd>
           </button>
         </div>
 
@@ -382,7 +443,7 @@ export default function App() {
             {/* Adjacency Matrix Table */}
             <div className="border border-gray-200 rounded-lg p-4 bg-white shadow-xs space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-100 pb-2 gap-2">
-                <div className="flex items-baseline gap-2">
+                <div className="flex flex-wrap items-baseline gap-2">
                   <h2 className="text-sm font-semibold text-gray-800">
                     Adjacency Matrix ({matrixResult.dim} × {matrixResult.dim})
                   </h2>
@@ -390,18 +451,33 @@ export default function App() {
                     {isPlain ? 'Topological step distances (0 on diagonal)' : activeWeightingOpt.label}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleExportCSV}
-                  className="px-3 py-1 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded shadow-2xs hover:text-blue-600 transition-colors cursor-pointer self-start sm:self-auto"
-                  title="Download matrix as CSV file"
-                >
-                  Export CSV
-                </button>
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-gray-500 bg-gray-100 px-2 py-1 rounded border border-gray-200">
+                    <kbd className="font-mono font-semibold">↑</kbd>
+                    <kbd className="font-mono font-semibold">↓</kbd>
+                    <kbd className="font-mono font-semibold">←</kbd>
+                    <kbd className="font-mono font-semibold">→</kbd>
+                    <span className="ml-1">Arrow keys</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleExportCSV}
+                    className="px-3 py-1 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded shadow-2xs hover:text-blue-600 transition-colors cursor-pointer"
+                    title="Download matrix as CSV file"
+                  >
+                    Export CSV
+                  </button>
+                </div>
               </div>
 
               {/* Uniform Square Matrix Container */}
-              <div className="overflow-auto max-h-96 border border-gray-200 rounded-md bg-gray-50/50 p-3">
+              <div
+                tabIndex={0}
+                onKeyDown={handleTableKeyDown}
+                role="region"
+                aria-label="Adjacency Matrix Table with keyboard arrow key navigation"
+                className="overflow-auto max-h-96 border border-gray-200 rounded-md bg-gray-50/50 p-3 outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all"
+              >
                 <div className="w-fit min-w-fit mx-auto shadow-2xs rounded bg-white overflow-hidden border border-gray-300">
                   <table
                     className="border-collapse font-mono text-center table-fixed"
@@ -434,34 +510,38 @@ export default function App() {
                           </div>
                         </th>
                         {/* Column Header Cells */}
-                        {graph.atoms.map((atom, j) => (
-                          <th
-                            key={`col-${j}`}
-                            style={{
-                              width: `${partitionSize}px`,
-                              height: `${partitionSize}px`,
-                              minWidth: `${partitionSize}px`,
-                              maxWidth: `${partitionSize}px`,
-                            }}
-                            className={`p-0 border border-gray-200 transition-colors ${
-                              hoveredCell?.col === j ? 'bg-blue-100 text-blue-900 font-bold' : 'bg-gray-100 text-gray-700'
-                            }`}
-                          >
-                            <div className="w-full h-full flex flex-col items-center justify-center leading-none gap-0.5">
-                              <span className="font-bold" style={{ fontSize: partitionSize <= 36 ? '10px' : '11px' }}>
-                                {atom.symbol}
-                              </span>
-                              <span className="text-gray-400 font-normal" style={{ fontSize: partitionSize <= 36 ? '8px' : '9px' }}>
-                                {j}
-                              </span>
-                            </div>
-                          </th>
-                        ))}
+                        {graph.atoms.map((atom, j) => {
+                          const activeCol = (hoveredCell?.col ?? selectedCell?.col) === j;
+                          return (
+                            <th
+                              key={`col-${j}`}
+                              style={{
+                                width: `${partitionSize}px`,
+                                height: `${partitionSize}px`,
+                                minWidth: `${partitionSize}px`,
+                                maxWidth: `${partitionSize}px`,
+                              }}
+                              className={`p-0 border border-gray-200 transition-colors ${
+                                activeCol ? 'bg-blue-100 text-blue-900 font-bold' : 'bg-gray-100 text-gray-700'
+                              }`}
+                            >
+                              <div className="w-full h-full flex flex-col items-center justify-center leading-none gap-0.5">
+                                <span className="font-bold" style={{ fontSize: partitionSize <= 36 ? '10px' : '11px' }}>
+                                  {atom.symbol}
+                                </span>
+                                <span className="text-gray-400 font-normal" style={{ fontSize: partitionSize <= 36 ? '8px' : '9px' }}>
+                                  {j}
+                                </span>
+                              </div>
+                            </th>
+                          );
+                        })}
                       </tr>
                     </thead>
                     <tbody>
                       {matrixResult.matrix.map((rowArr, i) => {
                         const atomI = graph.atoms[i];
+                        const activeRow = (hoveredCell?.row ?? selectedCell?.row) === i;
                         return (
                           <tr key={`row-${i}`} style={{ height: `${partitionSize}px` }}>
                             {/* Row Header Cell */}
@@ -473,7 +553,7 @@ export default function App() {
                                 maxWidth: `${partitionSize}px`,
                               }}
                               className={`p-0 bg-gray-100 border border-gray-200 transition-colors font-medium ${
-                                hoveredCell?.row === i ? 'bg-blue-100 text-blue-900 font-bold' : 'text-gray-700'
+                                activeRow ? 'bg-blue-100 text-blue-900 font-bold' : 'text-gray-700'
                               }`}
                             >
                               <div className="w-full h-full flex flex-col items-center justify-center leading-none gap-0.5">
@@ -489,32 +569,47 @@ export default function App() {
                             {/* Matrix Data Cell Partitions (Equal-Sized Squares) */}
                             {rowArr.map((val, j) => {
                               const isBonded = val > 0;
+                              const isSelected = selectedCell?.row === i && selectedCell?.col === j;
                               const isHovered = hoveredCell?.row === i && hoveredCell?.col === j;
-                              const isCrosshair = hoveredCell?.row === i || hoveredCell?.col === j;
+                              const isActive = isSelected || isHovered;
+                              const activeC = hoveredCell || selectedCell;
+                              const isCrosshair = activeC?.row === i || activeC?.col === j;
                               const displayVal = formatCellValue(val);
 
                               return (
                                 <td
                                   key={`cell-${i}-${j}`}
+                                  id={`matrix-cell-${i}-${j}`}
+                                  tabIndex={isSelected ? 0 : -1}
+                                  onClick={() => {
+                                    setSelectedCell({ row: i, col: j });
+                                    setHoveredCell({ row: i, col: j });
+                                  }}
                                   onMouseEnter={() => setHoveredCell({ row: i, col: j })}
                                   onMouseLeave={() => setHoveredCell(null)}
+                                  onFocus={() => {
+                                    setSelectedCell({ row: i, col: j });
+                                    setHoveredCell({ row: i, col: j });
+                                  }}
+                                  onKeyDown={handleTableKeyDown}
                                   style={{
                                     width: `${partitionSize}px`,
                                     height: `${partitionSize}px`,
                                     minWidth: `${partitionSize}px`,
                                     maxWidth: `${partitionSize}px`,
                                   }}
-                                  className={`p-0 border border-gray-200 transition-colors cursor-default select-none ${
-                                    isHovered
-                                      ? 'bg-blue-600 text-white font-bold shadow-inner'
+                                  className={`p-0 border border-gray-200 transition-colors cursor-pointer select-none outline-none relative ${
+                                    isActive
+                                      ? 'bg-blue-600 text-white font-bold ring-2 ring-blue-500 ring-offset-1 z-10'
                                       : isBonded
                                       ? isCrosshair
                                         ? 'bg-blue-100 text-blue-900 font-bold'
                                         : 'bg-blue-50 text-blue-800 font-semibold'
                                       : isCrosshair
                                       ? 'bg-gray-100 text-gray-700'
-                                      : 'text-gray-400 bg-white'
+                                      : 'text-gray-400 bg-white hover:bg-gray-50'
                                   }`}
+                                  title={`A[${i}, ${j}] = ${displayVal} (${atomI.symbol}${i} - ${graph.atoms[j].symbol}${j})`}
                                 >
                                   <div
                                     className="w-full h-full flex items-center justify-center font-mono leading-none"
@@ -600,35 +695,39 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Hover Inspection Breakdown */}
-              {hoveredCell && (
-                <div className="text-xs font-mono bg-gray-50 border border-gray-200 p-2.5 rounded-md text-gray-700 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                  <div>
-                    A[{hoveredCell.row}, {hoveredCell.col}] ={' '}
-                    <strong className="text-blue-700">
-                      {formatCellValue(matrixResult.matrix[hoveredCell.row]?.[hoveredCell.col] ?? 0)}
-                    </strong>
-                  </div>
-                  <div>
-                    {(matrixResult.matrix[hoveredCell.row]?.[hoveredCell.col] ?? 0) > 0 ? (
-                      <span className="text-green-700 font-medium">
-                        Atoms: {graph.atoms[hoveredCell.row]?.symbol}
-                        {hoveredCell.row} - {graph.atoms[hoveredCell.col]?.symbol}
-                        {hoveredCell.col}
-                        {!isPlain && ` (${activeWeightingOpt.label})`}
+              {/* Active / Focused / Hovered Cell Inspection Breakdown */}
+              {(() => {
+                const activeC = hoveredCell || selectedCell;
+                if (!activeC) return null;
+                const cellVal = matrixResult.matrix[activeC.row]?.[activeC.col] ?? 0;
+                return (
+                  <div className="text-xs font-mono bg-blue-50/70 border border-blue-200 p-2.5 rounded-md text-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block w-2 h-2 rounded-full bg-blue-600"></span>
+                      <span>
+                        A[{activeC.row}, {activeC.col}] ={' '}
+                        <strong className="text-blue-700 font-bold">
+                          {formatCellValue(cellVal)}
+                        </strong>
                       </span>
-                    ) : hoveredCell.row === hoveredCell.col ? (
-                      <span className="text-gray-500">Diagonal entry: 0</span>
-                    ) : (
-                      <span className="text-gray-500">
-                        Zero entry between {graph.atoms[hoveredCell.row]?.symbol}
-                        {hoveredCell.row} and {graph.atoms[hoveredCell.col]?.symbol}
-                        {hoveredCell.col}
-                      </span>
-                    )}
+                    </div>
+                    <div>
+                      {cellVal > 0 ? (
+                        <span className="text-blue-800 font-medium">
+                          Atoms: {graph.atoms[activeC.row]?.symbol}{activeC.row} - {graph.atoms[activeC.col]?.symbol}{activeC.col}
+                          {!isPlain && ` (${activeWeightingOpt.label})`}
+                        </span>
+                      ) : activeC.row === activeC.col ? (
+                        <span className="text-gray-500">Diagonal entry: 0</span>
+                      ) : (
+                        <span className="text-gray-500">
+                          Zero entry between {graph.atoms[activeC.row]?.symbol}{activeC.row} and {graph.atoms[activeC.col]?.symbol}{activeC.col}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
 
             {/* Eigenvalue Spectrum / Spectral Profile Bar Chart */}
