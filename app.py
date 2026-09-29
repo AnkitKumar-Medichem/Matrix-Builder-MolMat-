@@ -543,21 +543,31 @@ def main():
     st.markdown(
         """
         <style>
+        /* Ensure ample viewport height below form so dropdown popover ALWAYS opens downwards */
+        .main .block-container {
+            min-height: 100vh !important;
+            padding-bottom: 450px !important;
+        }
+
+        [data-testid="stForm"] {
+            margin-bottom: 250px !important;
+            overflow: visible !important;
+        }
+
         /* Prevent Streamlit form and column containers from clipping dropdown popover */
-        [data-testid="stForm"],
         [data-testid="stForm"] > div,
         [data-testid="column"] {
             overflow: visible !important;
         }
 
-        /* Prominent scrollbar and expanded max-height for compact dropdown */
+        /* Compact popover height (290px) fitting all 9 options cleanly */
         div[data-baseweb="popover"],
         div[data-baseweb="menu"],
         [data-baseweb="menu"],
         ul[role="listbox"],
         div[role="listbox"],
         [data-testid="stSelectboxVirtualDropdown"] {
-            max-height: 380px !important;
+            max-height: 290px !important;
             overflow-y: auto !important;
             scrollbar-width: thin !important;
             scrollbar-color: #3b82f6 #f1f5f9 !important;
@@ -592,10 +602,16 @@ def main():
         ul[role="listbox"] li {
             list-style: none !important;
             list-style-type: none !important;
-            padding: 7px 12px !important;
+            padding: 5px 12px !important;
+            min-height: 28px !important;
             font-size: 13px !important;
-            line-height: 1.3 !important;
+            line-height: 1.25 !important;
             cursor: pointer !important;
+        }
+        div[data-baseweb="popover"] li > div,
+        div[data-baseweb="popover"] div[role="option"] > div {
+            min-height: auto !important;
+            padding: 1px 0 !important;
         }
         </style>
         """,
