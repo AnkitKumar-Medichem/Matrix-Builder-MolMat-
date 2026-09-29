@@ -21,8 +21,14 @@ const WEIGHTING_OPTIONS: { id: MatrixType; label: string; formula: string; descr
   {
     id: 'plain',
     label: 'None (Plain Adjacency Matrix)',
-    formula: 'A[i, j] = Step distance (0 on diagonal)',
-    description: 'Core molecular adjacency matrix showing topological atomic connectivity and distances',
+    formula: 'A[i, j] = 1 if bonded, 0 otherwise (0 on diagonal)',
+    description: 'Standard 0/1 binary adjacency matrix (step 1 of core algorithm: directly bonded atoms)',
+  },
+  {
+    id: 'topological_distance',
+    label: 'Topological Connectivity Matrix',
+    formula: 'D[i, j] = Topological shortest path step distance (0 on diagonal)',
+    description: 'All-pairs topological step distance generated via the 11-step MSF algorithm',
   },
   {
     id: 'bond_order',
@@ -253,7 +259,7 @@ export default function App() {
                   handleRun();
                 }
               }}
-              placeholder="e.g. c1ccccc1, CCO, CC(=O)O"
+              placeholder="Enter SMILES string"
               className="flex-1 px-4 py-2.5 text-sm font-mono border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 shadow-xs"
               spellCheck={false}
             />
@@ -312,13 +318,9 @@ export default function App() {
           <button
             type="button"
             onClick={handleRun}
-            className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-md shadow-xs transition-colors cursor-pointer"
-            title="Calculate matrix (or press Enter in SMILES input)"
+            className="px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-md shadow-xs transition-colors cursor-pointer"
           >
-            <span>Run</span>
-            <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-normal bg-blue-700 text-blue-100 rounded border border-blue-500/50">
-              Enter ↵
-            </kbd>
+            Run
           </button>
         </div>
 
@@ -448,7 +450,7 @@ export default function App() {
                     Adjacency Matrix ({matrixResult.dim} × {matrixResult.dim})
                   </h2>
                   <span className="text-xs font-mono text-gray-500">
-                    {isPlain ? 'Topological step distances (0 on diagonal)' : activeWeightingOpt.label}
+                    {activeWeightingOpt.label}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 self-start sm:self-auto">

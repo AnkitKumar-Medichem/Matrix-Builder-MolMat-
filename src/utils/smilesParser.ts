@@ -23,6 +23,9 @@ export function parseSmiles(smilesInput: string, options: ParseOptions = {}): Mo
   if (!smiles) {
     throw new Error('Empty SMILES string');
   }
+  if (smiles.length > 2000) {
+    throw new Error('SMILES string exceeds maximum supported length (2000 characters)');
+  }
 
   const atoms: Atom[] = [];
   const bonds: Bond[] = [];
@@ -525,6 +528,7 @@ function findCycles(numAtoms: number, bonds: Bond[]): number[][] {
   const parent = new Array(numAtoms).fill(-1);
 
   function dfs(u: number, p: number, path: number[]) {
+    if (cycles.length >= 50) return;
     visited[u] = true;
     parent[u] = p;
     path.push(u);

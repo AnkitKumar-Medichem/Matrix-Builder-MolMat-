@@ -251,8 +251,8 @@ function buildRawMatrix(
         // Off-diagonal handling
         switch (matrixType) {
           case 'plain':
-            // Core algorithm: 11-step MSF algorithm (step distances 1, 2, 3...)
-            M[i][j] = distanceMatrix[i][j] === Infinity ? 0 : distanceMatrix[i][j];
+            // Standard Plain Adjacency Matrix (Step 1 of core algorithm: 1 if directly bonded, 0 otherwise)
+            M[i][j] = isBonded ? 1 : 0;
             break;
           case 'bond_order':
             M[i][j] = bondOrder;
@@ -507,7 +507,7 @@ export function computeMSFMatrix(graph: MoleculeGraph): number[][] {
 
   let k = 1;
 
-  while (true) {
+  while (k <= n) {
     // (2) Identify atom pairs with the step size of k in the MSF and store the coordinates of matrix in C
     const C: [number, number][] = [];
     for (let i = 0; i < n; i++) {
@@ -680,6 +680,22 @@ export function inspectCell(
 ): CellInspection {
   const atomRow = graph.atoms[row];
   const atomCol = graph.atoms[col];
+
+  if (!atomRow || !atomCol) {
+    return {
+      row,
+      col,
+      atomRow: atomRow || { index: row, symbol: '?', atomicNumber: 0, isAromatic: false, charge: 0, implicitH: 0, totalH: 0, electronegativity: 0, covalentRadius: 0, vdwRadius: 0, atomicMass: 0, polarizability: 0, valenceElectrons: 0, color: '#888', x: 0, y: 0 },
+      atomCol: atomCol || { index: col, symbol: '?', atomicNumber: 0, isAromatic: false, charge: 0, implicitH: 0, totalH: 0, electronegativity: 0, covalentRadius: 0, vdwRadius: 0, atomicMass: 0, polarizability: 0, valenceElectrons: 0, color: '#888', x: 0, y: 0 },
+      isBonded: false,
+      bondOrder: 0,
+      distance: 0,
+      rawValue: 0,
+      normalizedValue: 0,
+      formulaDescription: 'Out of bounds',
+      calculationSteps: ['Selected indices are outside current molecule dimensions.'],
+    };
+  }
 
   // Check bond
   const bond = graph.bonds.find(

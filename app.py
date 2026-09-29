@@ -12,7 +12,7 @@ import streamlit.components.v1 as components
 # Check for RDKit
 try:
     from rdkit import Chem
-    from rdkit.Chem import Draw, rdMolDescriptors
+    from rdkit.Chem import Draw, rdMolDescriptors, rdDepictor
     from rdkit.Chem.Draw import rdMolDraw2D
     HAS_RDKIT = True
     RDKIT_IMPORT_ERROR = None
@@ -43,18 +43,9 @@ COVALENT_RADIUS = {
 CARBON_REF_RADIUS = 76.0  # Reference Carbon covalent radius in pm
 CARBON_REF_EN = 2.55      # Reference Carbon Pauling electronegativity
 
-PRESETS = [
-    {"name": "Benzene", "smiles": "c1ccccc1"},
-    {"name": "Pyridine", "smiles": "c1ccncc1"},
-    {"name": "Aspirin", "smiles": "CC(=O)Oc1ccccc1C(=O)O"},
-    {"name": "Caffeine", "smiles": "CN1C=NC2=C1C(=O)N(C(=O)N2C)C"},
-    {"name": "Ethanol", "smiles": "CCO"},
-    {"name": "Toluene", "smiles": "Cc1ccccc1"},
-    {"name": "Acetone", "smiles": "CC(=O)C"},
-]
-
 MATRIX_WEIGHTINGS = {
     "plain": "None (Plain Adjacency Matrix)",
+    "topological_distance": "Topological Connectivity Matrix",
     "bond_order": "Bond Order",
     "atomic_number_prod": "Atomic Number Product (Z_i · Z_j)",
     "atomic_radius_sum": "Covalent Radius Sum (r_i + r_j)",
@@ -138,7 +129,7 @@ def compute_msf_matrix(n_atoms: int, bonds: list):
         adj[v].append(u)
 
     k = 1
-    while True:
+    while k <= n_atoms:
         # (2) Identify atom pairs with the step size of k in the MSF and store coordinates in C
         C = []
         for i in range(n_atoms):
@@ -216,7 +207,13 @@ def calculate_matrix_data(mol, matrix_type: str):
     matrix = np.zeros((n, n), dtype=float)
 
     if matrix_type == "plain":
-        # Core 11-step MSF algorithm (step distances 1, 2, 3...)
+        # Standard Plain Adjacency Matrix (Step 1 of core algorithm: 1 if directly bonded, 0 otherwise)
+        for u, v, _ in bonds:
+            matrix[u, v] = 1.0
+            matrix[v, u] = 1.0
+
+    elif matrix_type in ("topological_distance", "topological_connectivity"):
+        # Core 11-step MSF algorithm (all-pairs shortest path step distances 1, 2, 3...)
         msf = compute_msf_matrix(n, bonds)
         matrix = msf.astype(float)
 
@@ -317,18 +314,26 @@ def calculate_matrix_data(mol, matrix_type: str):
 
 def draw_molecule_svg(mol):
     """Draws 2D chemical structure with atom indices highlighted."""
-    d = rdMolDraw2D.MolDraw2DSVG(480, 280)
-    opts = d.drawOptions()
-    opts.addAtomIndices = True
-    opts.clearBackground = True
-    opts.bondLineWidth = 2.0
-    d.DrawMolecule(mol)
-    d.FinishDrawing()
-    svg = d.GetDrawingText()
-    svg_idx = svg.find("<svg")
-    if svg_idx != -1:
-        svg = svg[svg_idx:]
-    return svg
+    try:
+        mol_copy = Chem.Mol(mol)
+        try:
+            rdDepictor.Compute2DCoords(mol_copy)
+        except Exception:
+            pass
+        d = rdMolDraw2D.MolDraw2DSVG(480, 280)
+        opts = d.drawOptions()
+        opts.addAtomIndices = True
+        opts.clearBackground = True
+        opts.bondLineWidth = 2.0
+        d.DrawMolecule(mol_copy)
+        d.FinishDrawing()
+        svg = d.GetDrawingText()
+        svg_idx = svg.find("<svg")
+        if svg_idx != -1:
+            svg = svg[svg_idx:]
+        return svg
+    except Exception as e:
+        return f'<div style="padding:20px;color:#64748b;text-align:center;">Structure diagram preview unavailable ({str(e)})</div>'
 
 
 def render_uniform_square_matrix_html(matrix_data, matrix_type: str):
@@ -535,23 +540,16 @@ def main():
     )
 
     st.title("MolMat")
-    st.markdown("Topological Graph Analysis & Weighted Adjacency Matrices for Organic Molecules.")
-
-    # Preset selector
-    preset_cols = st.columns(len(PRESETS))
-    selected_smiles = "c1ccccc1"
-
-    for idx, p in enumerate(PRESETS):
-        if preset_cols[idx].button(p["name"], key=f"btn_{p['name']}"):
-            st.session_state["smiles_input"] = p["smiles"]
-
-    if "smiles_input" not in st.session_state:
-        st.session_state["smiles_input"] = "c1ccccc1"
 
     with st.form("smiles_calc_form", clear_on_submit=False):
         col_input, col_type = st.columns([2, 2])
         with col_input:
-            smiles = st.text_input("Enter SMILES String:", value=st.session_state["smiles_input"], key="input_smiles")
+            smiles = st.text_input(
+                "Enter SMILES String:",
+                value=st.session_state.get("smiles_input", ""),
+                placeholder="Enter SMILES string",
+                key="input_smiles"
+            )
         with col_type:
             matrix_type = st.selectbox(
                 "Matrix Weighting:",
@@ -559,17 +557,22 @@ def main():
                 format_func=lambda k: MATRIX_WEIGHTINGS[k],
                 key="select_matrix_type"
             )
-        run_submitted = st.form_submit_button("Calculate Matrix (Press Enter ↵)", type="primary")
+        run_submitted = st.form_submit_button("Run", type="primary")
 
     if run_submitted:
         st.session_state["has_run"] = True
+        st.session_state["smiles_input"] = smiles
         st.session_state["ran_smiles"] = smiles
         st.session_state["ran_matrix_type"] = matrix_type
 
     if not st.session_state.get("has_run", False):
         return
 
-    cur_smiles = st.session_state.get("ran_smiles", smiles)
+    cur_smiles = st.session_state.get("ran_smiles", smiles).strip()
+    if not cur_smiles:
+        st.warning("Please enter a SMILES string to calculate the matrix.")
+        return
+
     cur_matrix_type = st.session_state.get("ran_matrix_type", matrix_type)
 
     mol, err = parse_molecule(cur_smiles)
