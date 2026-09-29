@@ -550,62 +550,69 @@ def main():
             overflow: visible !important;
         }
 
-        /* Ensure ample viewport height below form so dropdown opens downward naturally */
-        .main .block-container {
-            min-height: 100vh !important;
-            padding-bottom: 350px !important;
+        /* 2-Column responsive grid for all 9 weighting options (No scrolling needed) */
+        div[data-testid="stForm"] div[data-testid="stRadio"] > div[role="radiogroup"] {
+            display: grid !important;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important;
+            gap: 8px 14px !important;
+            margin-top: 4px !important;
+            margin-bottom: 6px !important;
         }
 
-        /* Allow dropdown popover to expand up to 380px so all 9 items fit comfortably */
-        div[data-baseweb="popover"] {
-            z-index: 999999 !important;
+        div[data-testid="stForm"] div[data-testid="stRadio"] label {
+            padding: 8px 12px !important;
+            background: #f8fafc !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 6px !important;
+            cursor: pointer !important;
+            font-size: 13px !important;
+            display: flex !important;
+            align-items: center !important;
+            transition: all 0.15s ease-in-out !important;
         }
-        div[data-baseweb="popover"] > div,
+
+        div[data-testid="stForm"] div[data-testid="stRadio"] label:hover {
+            background: #eff6ff !important;
+            border-color: #3b82f6 !important;
+        }
+
+        /* Prominent scrollbar and expanded max-height for dropdown mode */
+        div[data-baseweb="popover"],
         div[data-baseweb="menu"],
-        ul[data-baseweb="menu"],
+        [data-baseweb="menu"],
         ul[role="listbox"],
-        [role="listbox"] {
-            max-height: 380px !important;
+        div[role="listbox"],
+        [data-testid="stSelectboxVirtualDropdown"] {
+            max-height: 420px !important;
             overflow-y: auto !important;
             scrollbar-width: thin !important;
-            scrollbar-color: #cbd5e1 transparent !important;
+            scrollbar-color: #3b82f6 #f1f5f9 !important;
         }
 
-        /* Compact sizing on list items so all 9 options fit cleanly (under 250px total) */
-        div[data-baseweb="popover"] li,
-        div[data-baseweb="popover"] div[role="option"],
-        div[data-baseweb="popover"] [role="option"],
-        ul[role="listbox"] li {
-            padding-top: 5px !important;
-            padding-bottom: 5px !important;
-            padding-left: 10px !important;
-            padding-right: 10px !important;
-            min-height: 27px !important;
-            font-size: 13px !important;
-            line-height: 1.25 !important;
-            white-space: normal !important;
-            word-break: break-word !important;
-            cursor: pointer !important;
-        }
-
-        /* Compact inner wrapper inside each option */
-        div[data-baseweb="popover"] li > div,
-        div[data-baseweb="popover"] [role="option"] > div {
-            padding-top: 1px !important;
-            padding-bottom: 1px !important;
-            min-height: auto !important;
-            line-height: 1.25 !important;
-        }
-
-        /* Single subtle scrollbar if ever needed on very small screens */
         ul[role="listbox"]::-webkit-scrollbar,
         div[data-baseweb="menu"]::-webkit-scrollbar {
-            width: 5px !important;
+            width: 8px !important;
+            display: block !important;
+        }
+        ul[role="listbox"]::-webkit-scrollbar-track,
+        div[data-baseweb="menu"]::-webkit-scrollbar-track {
+            background: #f1f5f9 !important;
+            border-radius: 4px !important;
         }
         ul[role="listbox"]::-webkit-scrollbar-thumb,
         div[data-baseweb="menu"]::-webkit-scrollbar-thumb {
-            background-color: #cbd5e1 !important;
+            background-color: #3b82f6 !important;
             border-radius: 4px !important;
+        }
+
+        /* Dropdown option items */
+        div[data-baseweb="popover"] li,
+        div[data-baseweb="popover"] div[role="option"],
+        ul[role="listbox"] li {
+            padding: 6px 10px !important;
+            font-size: 13px !important;
+            line-height: 1.3 !important;
+            cursor: pointer !important;
         }
         </style>
         """,
@@ -614,22 +621,48 @@ def main():
 
     st.title("MolMat")
 
+    # View mode toggle above form so switching is instant
+    selector_mode = st.radio(
+        "Weighting Selector View:",
+        options=["All 9 Options (Grid View, No Scrolling)", "Compact Dropdown"],
+        index=0,
+        horizontal=True,
+        key="weighting_selector_mode"
+    )
+
+    weighting_keys = list(MATRIX_WEIGHTINGS.keys())
+    current_choice = st.session_state.get("ran_matrix_type", "plain")
+    current_idx = weighting_keys.index(current_choice) if current_choice in weighting_keys else 0
+
     with st.form("smiles_calc_form", clear_on_submit=False):
-        col_input, col_type = st.columns([2, 2])
-        with col_input:
-            smiles = st.text_input(
-                "Enter SMILES String:",
-                value=st.session_state.get("smiles_input", ""),
-                placeholder="Enter SMILES string",
-                key="input_smiles"
-            )
-        with col_type:
+        smiles = st.text_input(
+            "Enter SMILES String:",
+            value=st.session_state.get("smiles_input", ""),
+            placeholder="Enter SMILES string (e.g. CC(=O)NC1=CC=C(C=C1)O)",
+            key="input_smiles"
+        )
+
+        st.markdown("**Matrix Weighting Technique:**")
+
+        if selector_mode == "Compact Dropdown":
             matrix_type = st.selectbox(
                 "Matrix Weighting:",
-                options=list(MATRIX_WEIGHTINGS.keys()),
-                format_func=lambda k: MATRIX_WEIGHTINGS[k],
-                key="select_matrix_type"
+                options=weighting_keys,
+                format_func=lambda k: f"{weighting_keys.index(k)+1}. {MATRIX_WEIGHTINGS[k]}",
+                index=current_idx,
+                label_visibility="collapsed",
+                key="select_matrix_type_dd"
             )
+        else:
+            matrix_type = st.radio(
+                "Matrix Weighting:",
+                options=weighting_keys,
+                format_func=lambda k: f"{weighting_keys.index(k)+1}. {MATRIX_WEIGHTINGS[k]}",
+                index=current_idx,
+                label_visibility="collapsed",
+                key="select_matrix_type_radio"
+            )
+
         run_submitted = st.form_submit_button("Run", type="primary")
 
     if run_submitted:
