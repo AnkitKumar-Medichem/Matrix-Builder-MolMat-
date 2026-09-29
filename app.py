@@ -550,40 +550,14 @@ def main():
             overflow: visible !important;
         }
 
-        /* 2-Column responsive grid for all 9 weighting options (No scrolling needed) */
-        div[data-testid="stForm"] div[data-testid="stRadio"] > div[role="radiogroup"] {
-            display: grid !important;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important;
-            gap: 8px 14px !important;
-            margin-top: 4px !important;
-            margin-bottom: 6px !important;
-        }
-
-        div[data-testid="stForm"] div[data-testid="stRadio"] label {
-            padding: 8px 12px !important;
-            background: #f8fafc !important;
-            border: 1px solid #e2e8f0 !important;
-            border-radius: 6px !important;
-            cursor: pointer !important;
-            font-size: 13px !important;
-            display: flex !important;
-            align-items: center !important;
-            transition: all 0.15s ease-in-out !important;
-        }
-
-        div[data-testid="stForm"] div[data-testid="stRadio"] label:hover {
-            background: #eff6ff !important;
-            border-color: #3b82f6 !important;
-        }
-
-        /* Prominent scrollbar and expanded max-height for dropdown mode */
+        /* Prominent scrollbar and expanded max-height for compact dropdown */
         div[data-baseweb="popover"],
         div[data-baseweb="menu"],
         [data-baseweb="menu"],
         ul[role="listbox"],
         div[role="listbox"],
         [data-testid="stSelectboxVirtualDropdown"] {
-            max-height: 420px !important;
+            max-height: 380px !important;
             overflow-y: auto !important;
             scrollbar-width: thin !important;
             scrollbar-color: #3b82f6 #f1f5f9 !important;
@@ -591,7 +565,7 @@ def main():
 
         ul[role="listbox"]::-webkit-scrollbar,
         div[data-baseweb="menu"]::-webkit-scrollbar {
-            width: 8px !important;
+            width: 7px !important;
             display: block !important;
         }
         ul[role="listbox"]::-webkit-scrollbar-track,
@@ -605,11 +579,20 @@ def main():
             border-radius: 4px !important;
         }
 
-        /* Dropdown option items */
+        /* Clean dropdown option items without bullets or numbering */
+        div[data-baseweb="popover"] ul,
+        ul[role="listbox"] {
+            list-style: none !important;
+            list-style-type: none !important;
+            padding-left: 0 !important;
+            margin: 0 !important;
+        }
         div[data-baseweb="popover"] li,
         div[data-baseweb="popover"] div[role="option"],
         ul[role="listbox"] li {
-            padding: 6px 10px !important;
+            list-style: none !important;
+            list-style-type: none !important;
+            padding: 7px 12px !important;
             font-size: 13px !important;
             line-height: 1.3 !important;
             cursor: pointer !important;
@@ -621,48 +604,27 @@ def main():
 
     st.title("MolMat")
 
-    # View mode toggle above form so switching is instant
-    selector_mode = st.radio(
-        "Weighting Selector View:",
-        options=["All 9 Options (Grid View, No Scrolling)", "Compact Dropdown"],
-        index=0,
-        horizontal=True,
-        key="weighting_selector_mode"
-    )
-
     weighting_keys = list(MATRIX_WEIGHTINGS.keys())
     current_choice = st.session_state.get("ran_matrix_type", "plain")
     current_idx = weighting_keys.index(current_choice) if current_choice in weighting_keys else 0
 
     with st.form("smiles_calc_form", clear_on_submit=False):
-        smiles = st.text_input(
-            "Enter SMILES String:",
-            value=st.session_state.get("smiles_input", ""),
-            placeholder="Enter SMILES string (e.g. CC(=O)NC1=CC=C(C=C1)O)",
-            key="input_smiles"
-        )
-
-        st.markdown("**Matrix Weighting Technique:**")
-
-        if selector_mode == "Compact Dropdown":
+        col_input, col_type = st.columns([2, 2])
+        with col_input:
+            smiles = st.text_input(
+                "Enter SMILES String:",
+                value=st.session_state.get("smiles_input", ""),
+                placeholder="Enter SMILES string",
+                key="input_smiles"
+            )
+        with col_type:
             matrix_type = st.selectbox(
                 "Matrix Weighting:",
                 options=weighting_keys,
-                format_func=lambda k: f"{weighting_keys.index(k)+1}. {MATRIX_WEIGHTINGS[k]}",
+                format_func=lambda k: MATRIX_WEIGHTINGS[k],
                 index=current_idx,
-                label_visibility="collapsed",
-                key="select_matrix_type_dd"
+                key="select_matrix_type"
             )
-        else:
-            matrix_type = st.radio(
-                "Matrix Weighting:",
-                options=weighting_keys,
-                format_func=lambda k: f"{weighting_keys.index(k)+1}. {MATRIX_WEIGHTINGS[k]}",
-                index=current_idx,
-                label_visibility="collapsed",
-                key="select_matrix_type_radio"
-            )
-
         run_submitted = st.form_submit_button("Run", type="primary")
 
     if run_submitted:
