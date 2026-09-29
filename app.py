@@ -539,63 +539,51 @@ def main():
         initial_sidebar_state="collapsed"
     )
 
-    # Ensure Streamlit selectbox / dropdown options menu opens downwards, is fully visible, and has a single clean scrollbar
+    # Ensure Streamlit selectbox dropdown displays all options cleanly without scrolling (matching preview app behavior)
     st.markdown(
         """
         <style>
-        /* Ensure ample viewport height below form so Popper dropdown opens downward without clipping */
+        /* Ensure ample viewport height below form so dropdown opens downward naturally */
         .main .block-container {
-            min-height: 80vh !important;
-            padding-bottom: 280px !important;
+            min-height: 100vh !important;
+            padding-bottom: 420px !important;
         }
 
-        /* Prevent parent wrappers from creating duplicate/nested scrollbars */
+        /* Completely remove scrolling from the dropdown - show all options at once */
         div[data-baseweb="popover"] {
             z-index: 999999 !important;
-            overflow: visible !important;
             max-height: none !important;
+            overflow: visible !important;
         }
         div[data-baseweb="popover"] > div,
-        div[data-baseweb="menu"] {
-            overflow: visible !important;
+        div[data-baseweb="menu"],
+        ul[data-baseweb="menu"],
+        ul[role="listbox"],
+        [role="listbox"] {
             max-height: none !important;
+            height: auto !important;
+            overflow: visible !important;
+            overflow-y: visible !important;
+            scrollbar-width: none !important;
         }
 
-        /* ONLY the actual options list has single scrolling */
-        ul[role="listbox"] {
-            max-height: 220px !important;
-            overflow-y: auto !important;
-            overflow-x: hidden !important;
-            -webkit-overflow-scrolling: touch !important;
-            overscroll-behavior: contain !important;
-            scrollbar-width: thin !important;
-            scrollbar-color: #94a3b8 #f1f5f9 !important;
+        /* Hide any scrollbars completely */
+        ul[role="listbox"]::-webkit-scrollbar,
+        div[data-baseweb="menu"]::-webkit-scrollbar,
+        div[data-baseweb="popover"]::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
         }
 
-        /* Single, clean scrollbar styling on the options list */
-        ul[role="listbox"]::-webkit-scrollbar {
-            width: 7px !important;
-            display: block !important;
-        }
-        ul[role="listbox"]::-webkit-scrollbar-track {
-            background: #f1f5f9 !important;
-            border-radius: 4px !important;
-        }
-        ul[role="listbox"]::-webkit-scrollbar-thumb {
-            background-color: #94a3b8 !important;
-            border-radius: 4px !important;
-            border: 1px solid #f1f5f9 !important;
-        }
-        ul[role="listbox"]::-webkit-scrollbar-thumb:hover {
-            background-color: #64748b !important;
-        }
-
-        /* Dropdown option items */
+        /* Compact, clean dropdown option items so all 9 options fit cleanly in view */
         ul[role="listbox"] li {
+            padding: 7px 12px !important;
+            font-size: 13px !important;
+            line-height: 1.35 !important;
             white-space: normal !important;
             word-break: break-word !important;
             cursor: pointer !important;
-            padding: 8px 12px !important;
         }
         </style>
         """,
