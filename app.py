@@ -539,75 +539,63 @@ def main():
         initial_sidebar_state="collapsed"
     )
 
-    # Ensure Streamlit selectbox / dropdown options menu is fully scrollable and visible
+    # Ensure Streamlit selectbox / dropdown options menu opens downwards, is fully visible, and has a single clean scrollbar
     st.markdown(
         """
         <style>
-        /* Fix Streamlit Selectbox dropdown scrolling and popover container */
+        /* Ensure ample viewport height below form so Popper dropdown opens downward without clipping */
+        .main .block-container {
+            min-height: 80vh !important;
+            padding-bottom: 280px !important;
+        }
+
+        /* Prevent parent wrappers from creating duplicate/nested scrollbars */
         div[data-baseweb="popover"] {
             z-index: 999999 !important;
-            max-height: 400px !important;
+            overflow: visible !important;
+            max-height: none !important;
         }
-        div[data-baseweb="popover"] > div {
-            max-height: 380px !important;
+        div[data-baseweb="popover"] > div,
+        div[data-baseweb="menu"] {
+            overflow: visible !important;
+            max-height: none !important;
         }
-        div[data-baseweb="popover"] ul,
-        div[data-baseweb="popover"] ul[role="listbox"],
-        div[data-baseweb="popover"] div[role="listbox"],
-        div[data-baseweb="menu"],
-        ul[data-baseweb="menu"],
-        [data-testid="stVirtualDropdown"],
-        [data-testid="stSelectboxVirtualDropdown"],
+
+        /* ONLY the actual options list has single scrolling */
         ul[role="listbox"] {
-            max-height: 300px !important;
+            max-height: 220px !important;
             overflow-y: auto !important;
             overflow-x: hidden !important;
             -webkit-overflow-scrolling: touch !important;
             overscroll-behavior: contain !important;
             scrollbar-width: thin !important;
             scrollbar-color: #94a3b8 #f1f5f9 !important;
-            pointer-events: auto !important;
         }
-        /* Make scrollbar clearly visible and draggable in WebKit (Chrome, Safari, Edge) */
-        div[data-baseweb="popover"] ul::-webkit-scrollbar,
-        div[data-baseweb="popover"] ul[role="listbox"]::-webkit-scrollbar,
-        div[data-baseweb="popover"] div[role="listbox"]::-webkit-scrollbar,
-        div[data-baseweb="menu"]::-webkit-scrollbar,
+
+        /* Single, clean scrollbar styling on the options list */
         ul[role="listbox"]::-webkit-scrollbar {
-            width: 8px !important;
+            width: 7px !important;
             display: block !important;
         }
-        div[data-baseweb="popover"] ul::-webkit-scrollbar-track,
-        div[data-baseweb="popover"] ul[role="listbox"]::-webkit-scrollbar-track,
-        div[data-baseweb="popover"] div[role="listbox"]::-webkit-scrollbar-track,
-        div[data-baseweb="menu"]::-webkit-scrollbar-track,
         ul[role="listbox"]::-webkit-scrollbar-track {
             background: #f1f5f9 !important;
             border-radius: 4px !important;
         }
-        div[data-baseweb="popover"] ul::-webkit-scrollbar-thumb,
-        div[data-baseweb="popover"] ul[role="listbox"]::-webkit-scrollbar-thumb,
-        div[data-baseweb="popover"] div[role="listbox"]::-webkit-scrollbar-thumb,
-        div[data-baseweb="menu"]::-webkit-scrollbar-thumb,
         ul[role="listbox"]::-webkit-scrollbar-thumb {
             background-color: #94a3b8 !important;
             border-radius: 4px !important;
-            border: 2px solid #f1f5f9 !important;
+            border: 1px solid #f1f5f9 !important;
         }
-        div[data-baseweb="popover"] ul::-webkit-scrollbar-thumb:hover,
-        div[data-baseweb="popover"] ul[role="listbox"]::-webkit-scrollbar-thumb:hover,
-        div[data-baseweb="popover"] div[role="listbox"]::-webkit-scrollbar-thumb:hover,
-        div[data-baseweb="menu"]::-webkit-scrollbar-thumb:hover,
         ul[role="listbox"]::-webkit-scrollbar-thumb:hover {
             background-color: #64748b !important;
         }
-        /* Ensure dropdown items do not clip text awkwardly */
-        div[data-baseweb="popover"] li,
-        ul[role="listbox"] li,
-        div[role="option"] {
+
+        /* Dropdown option items */
+        ul[role="listbox"] li {
             white-space: normal !important;
             word-break: break-word !important;
             cursor: pointer !important;
+            padding: 8px 12px !important;
         }
         </style>
         """,
