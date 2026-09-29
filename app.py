@@ -539,51 +539,73 @@ def main():
         initial_sidebar_state="collapsed"
     )
 
-    # Ensure Streamlit selectbox dropdown displays all options cleanly without scrolling (matching preview app behavior)
+    # Ensure Streamlit selectbox dropdown displays all options cleanly without clipping (matching preview app behavior)
     st.markdown(
         """
         <style>
+        /* Prevent Streamlit form and column containers from clipping dropdown popover */
+        [data-testid="stForm"],
+        [data-testid="stForm"] > div,
+        [data-testid="column"] {
+            overflow: visible !important;
+        }
+
         /* Ensure ample viewport height below form so dropdown opens downward naturally */
         .main .block-container {
             min-height: 100vh !important;
-            padding-bottom: 420px !important;
+            padding-bottom: 350px !important;
         }
 
-        /* Completely remove scrolling from the dropdown - show all options at once */
+        /* Allow dropdown popover to expand up to 380px so all 9 items fit comfortably */
         div[data-baseweb="popover"] {
             z-index: 999999 !important;
-            max-height: none !important;
-            overflow: visible !important;
         }
         div[data-baseweb="popover"] > div,
         div[data-baseweb="menu"],
         ul[data-baseweb="menu"],
         ul[role="listbox"],
         [role="listbox"] {
-            max-height: none !important;
-            height: auto !important;
-            overflow: visible !important;
-            overflow-y: visible !important;
-            scrollbar-width: none !important;
+            max-height: 380px !important;
+            overflow-y: auto !important;
+            scrollbar-width: thin !important;
+            scrollbar-color: #cbd5e1 transparent !important;
         }
 
-        /* Hide any scrollbars completely */
-        ul[role="listbox"]::-webkit-scrollbar,
-        div[data-baseweb="menu"]::-webkit-scrollbar,
-        div[data-baseweb="popover"]::-webkit-scrollbar {
-            display: none !important;
-            width: 0 !important;
-            height: 0 !important;
-        }
-
-        /* Compact, clean dropdown option items so all 9 options fit cleanly in view */
+        /* Compact sizing on list items so all 9 options fit cleanly (under 250px total) */
+        div[data-baseweb="popover"] li,
+        div[data-baseweb="popover"] div[role="option"],
+        div[data-baseweb="popover"] [role="option"],
         ul[role="listbox"] li {
-            padding: 7px 12px !important;
+            padding-top: 5px !important;
+            padding-bottom: 5px !important;
+            padding-left: 10px !important;
+            padding-right: 10px !important;
+            min-height: 27px !important;
             font-size: 13px !important;
-            line-height: 1.35 !important;
+            line-height: 1.25 !important;
             white-space: normal !important;
             word-break: break-word !important;
             cursor: pointer !important;
+        }
+
+        /* Compact inner wrapper inside each option */
+        div[data-baseweb="popover"] li > div,
+        div[data-baseweb="popover"] [role="option"] > div {
+            padding-top: 1px !important;
+            padding-bottom: 1px !important;
+            min-height: auto !important;
+            line-height: 1.25 !important;
+        }
+
+        /* Single subtle scrollbar if ever needed on very small screens */
+        ul[role="listbox"]::-webkit-scrollbar,
+        div[data-baseweb="menu"]::-webkit-scrollbar {
+            width: 5px !important;
+        }
+        ul[role="listbox"]::-webkit-scrollbar-thumb,
+        div[data-baseweb="menu"]::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1 !important;
+            border-radius: 4px !important;
         }
         </style>
         """,
