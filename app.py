@@ -539,6 +539,81 @@ def main():
         initial_sidebar_state="collapsed"
     )
 
+    # Ensure Streamlit selectbox / dropdown options menu is fully scrollable and visible
+    st.markdown(
+        """
+        <style>
+        /* Fix Streamlit Selectbox dropdown scrolling and popover container */
+        div[data-baseweb="popover"] {
+            z-index: 999999 !important;
+            max-height: 400px !important;
+        }
+        div[data-baseweb="popover"] > div {
+            max-height: 380px !important;
+        }
+        div[data-baseweb="popover"] ul,
+        div[data-baseweb="popover"] ul[role="listbox"],
+        div[data-baseweb="popover"] div[role="listbox"],
+        div[data-baseweb="menu"],
+        ul[data-baseweb="menu"],
+        [data-testid="stVirtualDropdown"],
+        [data-testid="stSelectboxVirtualDropdown"],
+        ul[role="listbox"] {
+            max-height: 300px !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            -webkit-overflow-scrolling: touch !important;
+            overscroll-behavior: contain !important;
+            scrollbar-width: thin !important;
+            scrollbar-color: #94a3b8 #f1f5f9 !important;
+            pointer-events: auto !important;
+        }
+        /* Make scrollbar clearly visible and draggable in WebKit (Chrome, Safari, Edge) */
+        div[data-baseweb="popover"] ul::-webkit-scrollbar,
+        div[data-baseweb="popover"] ul[role="listbox"]::-webkit-scrollbar,
+        div[data-baseweb="popover"] div[role="listbox"]::-webkit-scrollbar,
+        div[data-baseweb="menu"]::-webkit-scrollbar,
+        ul[role="listbox"]::-webkit-scrollbar {
+            width: 8px !important;
+            display: block !important;
+        }
+        div[data-baseweb="popover"] ul::-webkit-scrollbar-track,
+        div[data-baseweb="popover"] ul[role="listbox"]::-webkit-scrollbar-track,
+        div[data-baseweb="popover"] div[role="listbox"]::-webkit-scrollbar-track,
+        div[data-baseweb="menu"]::-webkit-scrollbar-track,
+        ul[role="listbox"]::-webkit-scrollbar-track {
+            background: #f1f5f9 !important;
+            border-radius: 4px !important;
+        }
+        div[data-baseweb="popover"] ul::-webkit-scrollbar-thumb,
+        div[data-baseweb="popover"] ul[role="listbox"]::-webkit-scrollbar-thumb,
+        div[data-baseweb="popover"] div[role="listbox"]::-webkit-scrollbar-thumb,
+        div[data-baseweb="menu"]::-webkit-scrollbar-thumb,
+        ul[role="listbox"]::-webkit-scrollbar-thumb {
+            background-color: #94a3b8 !important;
+            border-radius: 4px !important;
+            border: 2px solid #f1f5f9 !important;
+        }
+        div[data-baseweb="popover"] ul::-webkit-scrollbar-thumb:hover,
+        div[data-baseweb="popover"] ul[role="listbox"]::-webkit-scrollbar-thumb:hover,
+        div[data-baseweb="popover"] div[role="listbox"]::-webkit-scrollbar-thumb:hover,
+        div[data-baseweb="menu"]::-webkit-scrollbar-thumb:hover,
+        ul[role="listbox"]::-webkit-scrollbar-thumb:hover {
+            background-color: #64748b !important;
+        }
+        /* Ensure dropdown items do not clip text awkwardly */
+        div[data-baseweb="popover"] li,
+        ul[role="listbox"] li,
+        div[role="option"] {
+            white-space: normal !important;
+            word-break: break-word !important;
+            cursor: pointer !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
     st.title("MolMat")
 
     with st.form("smiles_calc_form", clear_on_submit=False):
@@ -584,6 +659,8 @@ def main():
     n = len(data["atoms"])
     num_bonds = len(data["bonds"])
     is_plain = (cur_matrix_type == "plain")
+    matrix_sum_display = str(int(data['matrix_sum'])) if is_plain else f"{data['matrix_sum']:.3f}"
+    half_sum_display = str(int(data['half_sum'])) if is_plain else f"{data['half_sum']:.3f}"
 
     # Top badges summary
     st.markdown(
@@ -595,7 +672,7 @@ def main():
             <span style="color: #cbd5e1;">|</span>
             <span>Bonds: <strong>{num_bonds}</strong></span>
             <span style="color: #cbd5e1;">|</span>
-            <span>Matrix Sum: <strong style="color: #1d4ed8;">{int(data['matrix_sum']) if is_plain else f"{data['matrix_sum']:.3f}"}</strong></span>
+            <span>Matrix Sum: <strong style="color: #1d4ed8;">{matrix_sum_display}</strong></span>
             <span style="color: #cbd5e1;">|</span>
             <span>Wiener Index: <strong style="color: #047857;">{data['wiener_index']}</strong></span>
         </div>
@@ -626,13 +703,13 @@ def main():
     with c1:
         st.metric(
             label="Matrix Sum (Σ M)",
-            value=f"{int(data['matrix_sum']) if is_plain else f'{data['matrix_sum']:.3f}'}",
+            value=matrix_sum_display,
             help="Sum of all elements in current matrix"
         )
     with c2:
         st.metric(
             label="Upper Triangle (Σ i<j)",
-            value=f"{int(data['half_sum']) if is_plain else f'{data['half_sum']:.3f}'}",
+            value=half_sum_display,
             help="Half-sum of symmetric matrix elements (total bonds in unweighted graph)"
         )
     with c3:
