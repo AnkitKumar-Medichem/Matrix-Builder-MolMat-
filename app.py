@@ -543,50 +543,64 @@ def main():
     st.markdown(
         """
         <style>
-        /* Ensure ample viewport height below form so dropdown popover ALWAYS opens downwards */
-        .main .block-container {
-            min-height: 100vh !important;
-            padding-bottom: 450px !important;
-        }
-
-        [data-testid="stForm"] {
-            margin-bottom: 250px !important;
-            overflow: visible !important;
-        }
-
         /* Prevent Streamlit form and column containers from clipping dropdown popover */
+        [data-testid="stForm"],
         [data-testid="stForm"] > div,
         [data-testid="column"] {
             overflow: visible !important;
         }
 
-        /* Compact popover height (290px) fitting all 9 options cleanly */
+        /* Ensure reasonable viewport clearance below form so dropdown opens downward without causing an outer page scrollbar */
+        .main .block-container {
+            padding-bottom: 220px !important;
+        }
+
+        /* Prevent parent popover wrappers from creating scrollbars (ELIMINATES DOUBLE SCROLLBAR) */
         div[data-baseweb="popover"],
+        div[data-baseweb="popover"] > div,
         div[data-baseweb="menu"],
-        [data-baseweb="menu"],
+        [data-baseweb="menu"] {
+            overflow: visible !important;
+            max-height: none !important;
+        }
+
+        div[data-baseweb="popover"]::-webkit-scrollbar,
+        div[data-baseweb="popover"] > div::-webkit-scrollbar,
+        div[data-baseweb="menu"]::-webkit-scrollbar,
+        [data-baseweb="menu"]::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+
+        /* ONLY the inner list gets a SINGLE, clean scrollbar */
         ul[role="listbox"],
-        div[role="listbox"],
-        [data-testid="stSelectboxVirtualDropdown"] {
-            max-height: 290px !important;
+        div[role="listbox"] {
+            max-height: 280px !important;
             overflow-y: auto !important;
+            overflow-x: hidden !important;
             scrollbar-width: thin !important;
-            scrollbar-color: #3b82f6 #f1f5f9 !important;
+            scrollbar-color: #94a3b8 #f1f5f9 !important;
         }
 
         ul[role="listbox"]::-webkit-scrollbar,
-        div[data-baseweb="menu"]::-webkit-scrollbar {
-            width: 7px !important;
+        div[role="listbox"]::-webkit-scrollbar {
+            width: 6px !important;
             display: block !important;
         }
         ul[role="listbox"]::-webkit-scrollbar-track,
-        div[data-baseweb="menu"]::-webkit-scrollbar-track {
+        div[role="listbox"]::-webkit-scrollbar-track {
             background: #f1f5f9 !important;
             border-radius: 4px !important;
         }
         ul[role="listbox"]::-webkit-scrollbar-thumb,
-        div[data-baseweb="menu"]::-webkit-scrollbar-thumb {
-            background-color: #3b82f6 !important;
+        div[role="listbox"]::-webkit-scrollbar-thumb {
+            background-color: #94a3b8 !important;
             border-radius: 4px !important;
+        }
+        ul[role="listbox"]::-webkit-scrollbar-thumb:hover,
+        div[role="listbox"]::-webkit-scrollbar-thumb:hover {
+            background-color: #64748b !important;
         }
 
         /* Clean dropdown option items without bullets or numbering */
@@ -602,7 +616,7 @@ def main():
         ul[role="listbox"] li {
             list-style: none !important;
             list-style-type: none !important;
-            padding: 5px 12px !important;
+            padding: 6px 12px !important;
             min-height: 28px !important;
             font-size: 13px !important;
             line-height: 1.25 !important;
